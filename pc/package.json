@@ -1,0 +1,34 @@
+{
+  "name": "txqs-batch-watermark",
+  "version": "1.0.1",
+  "description": "天象七星 批量水印台账工具",
+  "main": "main.js",
+  "author": "tiantexiang",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^31.7.7",
+    "electron-builder": "^24.13.3"
+  },
+  "scripts": {
+    "win": "electron-builder --win --x64"
+  },
+  "build": {
+    "appId": "cn.tianxiang.batchwm",
+    "productName": "天象七星批量水印",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "天象七星批量水印.html"
+    ],
+    "win": {
+      "target": [
+        "portable",
+        "zip"
+      ],
+      "icon": null,
+      "artifactName": "${productName}.${ext}"
+    }
+  }
+}

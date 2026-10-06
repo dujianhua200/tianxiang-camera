@@ -1,0 +1,16 @@
+services:
+  tianxiang-ledger:
+    build: .
+    container_name: tianxiang-ledger
+    restart: unless-stopped
+    # host 网络：容器直接共享 NAS 的 IPv4/IPv6，家宽 IPv6 直连必需
+    network_mode: host
+    environment:
+      - PORT=9800
+      - TOKEN=tianxiang2026
+      - INVITE_CODE=tx888
+      - ADMIN_PASSWORD=admin888
+    volumes:
+      - "/vol1/1000/Photos/xiangjihoutai/data:/data"
+      - "./web:/app/web"
+      - "./server.js:/app/server.js"

@@ -1,0 +1,610 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>天象七星 · 批量水印台账工具</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root { --bg:#0b0e12; --card:#14181e; --line:#232a33; --txt:#e8ecf0; --dim:#8b95a1; --gold:#FFD028; --ok:#34d399; --bad:#f87171; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--txt); font:14px/1.6 "Microsoft YaHei","PingFang SC",system-ui,sans-serif; }
+  header { position:sticky; top:0; z-index:9; background:rgba(11,14,18,.95); border-bottom:1px solid var(--line); padding:12px 18px; display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+  h1 { font-size:16px; letter-spacing:.05em; } h1 em { color:var(--gold); font-style:normal; }
+  h1 small { color:var(--dim); font-size:11px; margin-left:8px; letter-spacing:.12em; }
+  button { background:var(--card); color:var(--txt); border:1px solid var(--line); border-radius:8px; padding:7px 14px; font-size:13px; cursor:pointer; }
+  button:hover { border-color:var(--gold); color:var(--gold); }
+  button.gold { background:var(--gold); color:#111; border:none; font-weight:700; }
+  button.gold:hover { filter:brightness(1.1); color:#111; }
+  button:disabled { opacity:.4; cursor:not-allowed; }
+  input,select,textarea { background:var(--card); color:var(--txt); border:1px solid var(--line); border-radius:8px; padding:6px 9px; font-size:12.5px; outline:none; }
+  input:focus,select:focus,textarea:focus { border-color:var(--gold); }
+  main { padding:14px 18px 80px; }
+  .panel { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 16px; margin-bottom:14px; }
+  .panel h3 { font-size:13px; color:var(--gold); margin-bottom:10px; letter-spacing:.08em; }
+  .row-flex { display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+  .row-flex label { font-size:12.5px; color:var(--dim); }
+  textarea { width:100%; min-height:88px; font-family:Consolas,monospace; font-size:12px; resize:vertical; }
+  .sw { display:inline-flex; align-items:center; gap:6px; font-size:12.5px; color:var(--txt); cursor:pointer; user-select:none; }
+  .sw input { width:15px; height:15px; accent-color:var(--gold); }
+  table { width:100%; border-collapse:collapse; font-size:12.5px; }
+  th,td { border-bottom:1px solid var(--line); padding:7px 8px; text-align:left; vertical-align:middle; }
+  th { color:var(--gold); font-weight:600; background:#1a2028; position:sticky; top:0; }
+  td input,td select { width:100%; }
+  td .thumb { width:46px; height:62px; object-fit:cover; border-radius:6px; display:block; background:#000; cursor:zoom-in; }
+  .tag { font-size:11px; padding:1px 8px; border-radius:99px; }
+  .tag.wait { background:rgba(251,191,36,.15); color:#fbbf24; }
+  .tag.doing { background:rgba(96,165,250,.15); color:#60a5fa; }
+  .tag.done { background:rgba(52,211,153,.15); color:var(--ok); }
+  .tag.err { background:rgba(248,113,113,.15); color:var(--bad); cursor:pointer; }
+  .fname { max-width:150px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--dim); font-size:11.5px; }
+  #log { font-size:12px; color:var(--dim); max-height:90px; overflow:auto; margin-top:8px; }
+  #log b { color:var(--gold); font-weight:600; }
+  dialog { background:var(--card); border:1px solid var(--line); border-radius:14px; color:var(--txt); max-width:92vw; }
+  dialog::backdrop { background:rgba(0,0,0,.75); }
+  dialog img { max-height:80vh; display:block; }
+  .empty { text-align:center; color:var(--dim); padding:44px; border:1px dashed var(--line); border-radius:12px; }
+  .tblwrap { overflow:auto; max-height:62vh; border:1px solid var(--line); border-radius:12px; }
+  .stat { font-size:12px; color:var(--dim); }
+</style>
+</head>
+<body>
+<header>
+  <h1><em>天象七星</em> 批量水印台账工具 <small>TIANXIANG SAT-7 BATCH</small></h1>
+  <span class="sp"></span>
+  <span class="stat" id="stat"></span>
+  <button class="gold" id="btnGen" disabled>生成水印并打包下载</button>
+</header>
+<main>
+  <div class="panel">
+    <h3>① 导入照片（时间默认读照片 EXIF，可改）</h3>
+    <div class="row-flex">
+      <button id="btnImg">选择图片（可多选）</button>
+      <input type="file" id="fileImg" accept="image/jpeg,image/png" multiple hidden />
+      <button id="btnClear">清空列表</button>
+      <span class="stat" id="imgStat">尚未导入</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3>② 批量导入经纬度（每行一条，按顺序对应图片；也支持“文件名,纬度,经度”）</h3>
+    <textarea id="coordBox" placeholder="32.170357, 114.051485&#10;N 31.223510° E 121.452602°&#10;丰乐园小区照片1.jpg, 32.17, 114.05&#10;……"></textarea>
+    <div class="row-flex" style="margin-top:8px">
+      <label>坐标系：</label>
+      <select id="coordDatum"><option value="wgs84">WGS-84（GPS/卫星）</option><option value="gcj02">GCJ-02（地图App复制）</option></select>
+      <button class="gold" id="btnCoord">导入坐标</button>
+      <button id="btnAddr">批量解析地址</button>
+      <button id="btnWeather">按日期批量匹配天气</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3>③ 水印设置（全局，可逐行改施工内容）</h3>
+    <div class="row-flex">
+      <label>样式：</label>
+      <select id="wmStyle"><option value="site">七星台账</option><option value="card">工程卡片</option></select>
+      <label>工程名称：</label><input id="projName" style="width:220px" value="市政道路改造工程 · 三标段" />
+      <label>默认施工内容：</label><input id="defNote" style="width:160px" placeholder="如 光缆敷设" />
+    </div>
+    <div class="row-flex" style="margin-top:8px">
+      <span class="stat">显示项：</span>
+      <label class="sw"><input type="checkbox" id="fDate" checked />日期时间</label>
+      <label class="sw"><input type="checkbox" id="fAddr" checked />地址</label>
+      <label class="sw"><input type="checkbox" id="fCoord" checked />经纬度</label>
+      <label class="sw"><input type="checkbox" id="fWeather" checked />天气</label>
+      <label class="sw"><input type="checkbox" id="fProject" checked />工程名称</label>
+      <label class="sw"><input type="checkbox" id="fNote" checked />施工内容</label>
+    </div>
+    <div id="log"></div>
+  </div>
+
+  <div class="empty" id="emptyTip">导入照片后在这里编辑每行的时间 / 经纬度 / 地址 / 天气 / 施工内容</div>
+  <div class="tblwrap" id="tblWrap" style="display:none">
+    <table>
+      <thead><tr><th>#</th><th>预览</th><th>文件</th><th style="min-width:170px">拍摄时间</th><th style="min-width:90px">纬度</th><th style="min-width:90px">经度</th><th style="min-width:200px">地址</th><th style="min-width:96px">天气</th><th style="min-width:130px">施工内容</th><th>状态</th></tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+</main>
+<dialog id="viewer"><img id="viewerImg" /></dialog>
+
+<script>
+'use strict';
+/* ================= 基础工具 ================= */
+const $ = (s) => document.querySelector(s);
+const AMAP_KEY = '5798d19c111472c909b40e8af84ad139';
+const MONO = '"Consolas","JetBrains Mono",monospace';
+const SANS = '"Microsoft YaHei","Noto Sans SC",sans-serif';
+
+function log(msg) {
+  const el = document.createElement('div');
+  el.innerHTML = '<b>' + new Date().toTimeString().slice(0, 8) + '</b> ' + msg;
+  $('#log').prepend(el);
+}
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const pad2 = (n) => String(n).padStart(2, '0');
+const fmtSite = (d) => `${d.getFullYear()}.${pad2(d.getMonth() + 1)}.${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+const fmtFile = (d) => `${d.getFullYear()}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}_${pad2(d.getHours())}${pad2(d.getMinutes())}${pad2(d.getSeconds())}`;
+function toLocalInput(d) {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+
+/* ================= 坐标转换 WGS84<->GCJ02 ================= */
+const PI = Math.PI, AXIS = 6378245.0, EE = 0.00669342162296594323;
+const outOfChina = (lat, lng) => lng < 72.004 || lng > 137.8347 || lat < 0.8293 || lat > 55.8271;
+function tLat(x, y) {
+  let r = -100 + 2 * x + 3 * y + 0.2 * y * y + 0.1 * x * y + 0.2 * Math.sqrt(Math.abs(x));
+  r += ((20 * Math.sin(6 * x * PI) + 20 * Math.sin(2 * x * PI)) * 2) / 3;
+  r += ((20 * Math.sin(y * PI) + 40 * Math.sin((y / 3) * PI)) * 2) / 3;
+  r += ((160 * Math.sin((y / 12) * PI) + 320 * Math.sin((y * PI) / 30)) * 2) / 3;
+  return r;
+}
+function tLng(x, y) {
+  let r = 300 + x + 2 * y + 0.1 * x * x + 0.1 * x * y + 0.1 * Math.sqrt(Math.abs(x));
+  r += ((20 * Math.sin(6 * x * PI) + 20 * Math.sin(2 * x * PI)) * 2) / 3;
+  r += ((20 * Math.sin(x * PI) + 40 * Math.sin((x / 3) * PI)) * 2) / 3;
+  r += ((150 * Math.sin((x / 12) * PI) + 300 * Math.sin((x / 30) * PI)) * 2) / 3;
+  return r;
+}
+function wgs2gcj(lat, lng) {
+  if (outOfChina(lat, lng)) return { lat, lng };
+  let dLat = tLat(lng - 105, lat - 35), dLng = tLng(lng - 105, lat - 35);
+  const rad = (lat / 180) * PI;
+  let magic = Math.sin(rad); magic = 1 - EE * magic * magic;
+  const sq = Math.sqrt(magic);
+  dLat = (dLat * 180) / (((AXIS * (1 - EE)) / (magic * sq)) * PI);
+  dLng = (dLng * 180) / ((AXIS / sq) * Math.cos(rad) * PI);
+  return { lat: lat + dLat, lng: lng + dLng };
+}
+
+/* ================= 坐标文本解析 ================= */
+function parseOne(t) {
+  const m = t.toUpperCase()
+    .match(/^([NSWE])?\s*(-?\d+(?:\.\d+)?)°?\s*(?:(\d+(?:\.\d+)?)['′])?\s*(?:(\d+(?:\.\d+)?)["″])?\s*([NSWE])?$/);
+  if (!m) return null;
+  let v = Math.abs(parseFloat(m[2]));
+  if (m[3]) v += parseFloat(m[3]) / 60;
+  if (m[4]) v += parseFloat(m[4]) / 3600;
+  const hemi = m[1] || m[5] || '';
+  if (hemi === 'S' || hemi === 'W') v = -v;
+  if (!hemi && m[2].startsWith('-')) v = -v;
+  return v;
+}
+function parseCoordLine(line) {
+  let name = '';
+  let body = line;
+  const cm = line.match(/^([^,，\s\dNS].*?)[,，]\s*(.+)$/); // 前缀文件名
+  if (cm) { name = cm[1].trim(); body = cm[2]; }
+  const s = body.replace(/[,，;；]+/g, ' ').replace(/(^|\s)([NSEW])\s+(?=[\d°\-])/gi, '$1$2').trim();
+  const toks = s.split(/\s+/).filter(Boolean);
+  const nums = [];
+  for (const t of toks) { const v = parseOne(t); if (v === null) return null; nums.push(v); }
+  if (nums.length === 2) {
+    const [a, b] = nums;
+    if (Math.abs(a) <= 90 && Math.abs(b) <= 180) return { name, lat: a, lng: b };
+    if (Math.abs(b) <= 90 && Math.abs(a) <= 180) return { name, lat: b, lng: a };
+  }
+  if (nums.length === 4) return { name, lat: Math.abs(nums[0]) + Math.abs(nums[1]) / 60, lng: Math.abs(nums[2]) + Math.abs(nums[3]) / 60 };
+  if (nums.length === 6) return { name, lat: Math.abs(nums[0]) + Math.abs(nums[1]) / 60 + Math.abs(nums[2]) / 3600, lng: Math.abs(nums[3]) + Math.abs(nums[4]) / 60 + Math.abs(nums[5]) / 3600 };
+  return null;
+}
+
+/* ================= 地址解析（高德） ================= */
+function str(x) { return typeof x === 'string' ? x : ''; }
+async function amapRegeo(latWgs, lngWgs) {
+  const g = wgs2gcj(latWgs, lngWgs);
+  const url = `https://restapi.amap.com/v3/geocode/regeo?location=${g.lng.toFixed(6)},${g.lat.toFixed(6)}&extensions=all&radius=1000&key=${AMAP_KEY}`;
+  const res = await fetch(url);
+  const j = await res.json();
+  if (j.status !== '1' || !j.regeocode) return '';
+  const rc = j.regeocode, ac = rc.addressComponent || {};
+  const parts = [str(ac.province), str(ac.city), str(ac.district), str(ac.township)].filter(Boolean);
+  const uniq = parts.filter((p, i) => parts.indexOf(p) === i);
+  let detail = '';
+  if (Array.isArray(rc.pois) && rc.pois.length) detail = str(rc.pois[0].name);
+  if (!detail && Array.isArray(rc.businessAreas) && rc.businessAreas.length) detail = str(rc.businessAreas[0].name);
+  const head = uniq.join('');
+  return (head && detail ? head + '·' + detail : head || detail) || str(rc.formatted_address);
+}
+
+/* ================= 天气（Open-Meteo，按日期自动匹配） ================= */
+const WMO = { 0:'晴',1:'多云',2:'多云',3:'阴',45:'雾',48:'雾凇',51:'小雨',53:'小雨',55:'小雨',56:'冻雨',57:'冻雨',61:'小雨',63:'中雨',65:'大雨',66:'冻雨',67:'冻雨',71:'小雪',73:'中雪',75:'大雪',77:'雪',80:'阵雨',81:'阵雨',82:'强阵雨',85:'阵雪',86:'阵雪',95:'雷阵雨',96:'雷阵雨',99:'雷阵雨' };
+async function weatherFor(lat, lng, date) {
+  const dstr = `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+  const today = new Date(); const tstr = `${today.getFullYear()}-${pad2(today.getMonth() + 1)}-${pad2(today.getDate())}`;
+  let j;
+  try {
+    if (dstr >= tstr) {
+      j = await (await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(3)}&longitude=${lng.toFixed(3)}&current=temperature_2m,weather_code&timezone=Asia%2FShanghai`)).json();
+      const c = j.current; if (!c) return '';
+      return (WMO[c.weather_code] || '') + ' ' + Math.round(c.temperature_2m) + '°C';
+    }
+    j = await (await fetch(`https://archive-api.open-meteo.com/v1/archive?latitude=${lat.toFixed(3)}&longitude=${lng.toFixed(3)}&start_date=${dstr}&end_date=${dstr}&daily=weather_code,temperature_2m_max&timezone=Asia%2FShanghai`)).json();
+    const code = j.daily && j.daily.weather_code && j.daily.weather_code[0];
+    const tmax = j.daily && j.daily.temperature_2m_max && j.daily.temperature_2m_max[0];
+    if (code == null) return '';
+    return (WMO[code] || '') + ' ' + Math.round(tmax) + '°C';
+  } catch { return ''; }
+}
+
+/* ================= EXIF 拍摄时间 ================= */
+function exifTime(buf) {
+  try {
+    const v = new DataView(buf), b = new Uint8Array(buf);
+    if (b[0] !== 0xff || b[1] !== 0xd8) return null;
+    let i = 2;
+    while (i + 10 < b.length) {
+      if (b[i] !== 0xff) break;
+      const mk = b[i + 1];
+      if (mk === 0xe1 && b[i + 4] === 0x45 && b[i + 5] === 0x78 && b[i + 6] === 0x69 && b[i + 7] === 0x66) {
+        const ts = i + 10;
+        const little = v.getUint16(ts) === 0x4949;
+        const u16 = (o) => v.getUint16(o, little), u32 = (o) => v.getUint32(o, little);
+        const ifd0 = ts + u32(ts + 4);
+        let exifPtr = -1;
+        for (let k = 0; k < u16(ifd0); k++) {
+          const e = ifd0 + 2 + k * 12;
+          if (u16(e) === 0x8769) { exifPtr = ts + u32(e + 8); break; }
+        }
+        if (exifPtr < 0) return null;
+        for (let k = 0; k < u16(exifPtr); k++) {
+          const e = exifPtr + 2 + k * 12;
+          if (u16(e) === 0x9003) {
+            const off = ts + u32(e + 8); let s = '';
+            for (let c = 0; c < 19; c++) s += String.fromCharCode(v.getUint8(off + c));
+            const m = s.match(/^(\d{4}):(\d{2}):(\d{2}) (\d{2}):(\d{2}):(\d{2})/);
+            if (m) return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]);
+          }
+        }
+        return null;
+      }
+      if (mk === 0xda) break;
+      i += 2 + v.getUint16(i + 2);
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
+/* ================= 水印绘制 ================= */
+const ICONS = {
+  pin: 'M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z',
+  nav: 'M3 11l19-9-9 19-2-8-8-2Z',
+  mountain: 'm8 3 4 8 5-5 5 15H2L8 3z',
+  case: 'M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16',
+  note: 'M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z',
+  therm: 'M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z',
+};
+function drawIcon(ctx, name, x, y, size, color) {
+  ctx.save(); ctx.translate(x, y); ctx.scale(size / 24, size / 24);
+  ctx.lineWidth = 2.1; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = color;
+  ctx.stroke(new Path2D(ICONS[name])); ctx.restore();
+}
+function rr(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
+function ellipsize(ctx, t, maxW) {
+  if (ctx.measureText(t).width <= maxW) return t;
+  while (t.length > 1 && ctx.measureText(t + '…').width > maxW) t = t.slice(0, -1);
+  return t + '…';
+}
+function wrapText(ctx, text, maxW, maxLines) {
+  const lines = []; let cur = '', idx = 0;
+  while (idx < text.length) {
+    const ch = text[idx];
+    if (cur && ctx.measureText(cur + ch).width > maxW) { lines.push(cur); cur = ''; if (lines.length === maxLines) break; }
+    else { cur += ch; idx++; }
+  }
+  if (lines.length < maxLines && cur) lines.push(cur);
+  return lines;
+}
+
+function drawSite(ctx, W, H, d, f) {
+  const portrait = H > W;
+  const m = Math.round(W * 0.031);
+  const cardW = Math.round(W * (portrait ? 0.6 : 0.42));
+  const S = cardW / 100, pad = 4.5 * S, headH = 11.6 * S;
+  const fLab = `600 ${5.4 * S}px ${SANS}`, fVal = `500 ${5.4 * S}px ${SANS}`;
+  const rows = [];
+  if (f.addr && d.address) rows.push({ label: '地\u3000\u3000点：', value: d.address });
+  if (f.coord) { rows.push({ label: '经\u3000\u3000度：', value: d.lngDms }); rows.push({ label: '纬\u3000\u3000度：', value: d.latDms }); }
+  if (f.date) rows.push({ label: '拍 摄 时 间：', value: d.siteTime });
+  if (f.weather && d.weather) rows.push({ label: '天\u3000\u3000气：', value: d.weather });
+  if (f.project && d.project) rows.push({ label: '工\u3000\u3000程：', value: d.project });
+  const showHead = f.note;
+  const lineH = 6.9 * S, rowPad = 5.3 * S;
+  ctx.textBaseline = 'alphabetic';
+  const layout = rows.map((r) => {
+    ctx.font = fLab; const lw = ctx.measureText(r.label).width;
+    ctx.font = fVal;
+    return { label: r.label, lw, lines: wrapText(ctx, r.value, cardW - lw - pad * 2, 4), h: 0 };
+  });
+  layout.forEach((r) => { r.h = r.lines.length * lineH + rowPad; });
+  const totalH = (showHead ? headH : 0) + layout.reduce((a, r) => a + r.h, 0) + 2 * S;
+  const x = m, y = H - m - totalH;
+  rr(ctx, x, y, cardW, totalH, 2.2 * S);
+  ctx.fillStyle = 'rgba(240,242,244,0.72)'; ctx.fill();
+  if (showHead) {
+    ctx.save(); rr(ctx, x, y, cardW, totalH, 2.2 * S); ctx.clip();
+    ctx.fillStyle = 'rgba(247,212,0,0.88)'; ctx.fillRect(x, y, cardW, headH); ctx.restore();
+    const content = d.note || d.project || '';
+    ctx.font = `700 ${5.6 * S}px ${SANS}`; ctx.fillStyle = 'rgba(23,24,26,0.95)';
+    const lab = '施 工 内 容：'; ctx.fillText(lab, x + pad, y + headH / 2 + 2 * S);
+    const labW = ctx.measureText(lab).width;
+    ctx.font = `600 ${5.4 * S}px ${SANS}`;
+    const val = ellipsize(ctx, content, cardW - labW - pad * 2 - 3 * S);
+    const valW = ctx.measureText(val).width;
+    ctx.fillStyle = 'rgba(61,61,61,0.95)'; ctx.fillText(val, x + pad + labW, y + headH / 2 + 1.9 * S);
+    ctx.beginPath(); ctx.moveTo(x + pad + labW, y + headH / 2 + 3.9 * S); ctx.lineTo(x + pad + labW + valW, y + headH / 2 + 3.9 * S);
+    ctx.strokeStyle = 'rgba(60,60,60,0.65)'; ctx.lineWidth = Math.max(1, W * 0.0005); ctx.stroke();
+  }
+  let cy = y + (showHead ? headH : 0);
+  layout.forEach((r, i) => {
+    if (i > 0) { ctx.beginPath(); ctx.moveTo(x + pad, cy); ctx.lineTo(x + cardW - pad, cy); ctx.strokeStyle = 'rgba(23,24,26,0.08)'; ctx.lineWidth = Math.max(1, W * 0.0004); ctx.stroke(); }
+    const b0 = cy + rowPad / 2 + 5.1 * S;
+    ctx.font = fLab; ctx.fillStyle = 'rgba(23,24,26,0.95)'; ctx.fillText(r.label, x + pad, b0);
+    ctx.font = fVal; ctx.fillStyle = 'rgba(38,40,43,0.95)';
+    r.lines.forEach((ln, j) => ctx.fillText(ln, x + pad + r.lw, b0 + j * lineH));
+    cy += r.h;
+  });
+}
+
+function drawCard(ctx, W, H, d, f) {
+  const m = Math.round(Math.min(W, H) * 0.032);
+  const portrait = H > W;
+  const cardW = portrait ? W - m * 2 : Math.min(W - m * 2, Math.round(W * 0.56));
+  const S = cardW / 100, pad = 4 * S;
+  const tx = m + pad + 3.4 * S, contentW = m + cardW - pad - tx;
+  ctx.textBaseline = 'alphabetic';
+  ctx.font = `500 ${3.45 * S}px ${SANS}`;
+  const addrLines = f.addr && d.address ? wrapText(ctx, d.address, contentW - 6.4 * S, 2) : [];
+  const rows = [];
+  if (addrLines.length) rows.push({ icon: 'pin', lines: addrLines });
+  if (f.coord) rows.push({ icon: 'nav', lines: [d.latDms, d.lngDms], mono: true });
+  if (f.project && d.project) rows.push({ icon: 'case', lines: [d.project] });
+  if (f.note && d.note) rows.push({ icon: 'note', lines: [d.note] });
+  let totalH = pad * 2 + 11.8 * S;
+  const dateRowH = 4.4 * S;
+  if (f.date || (f.weather && d.weather)) totalH += dateRowH;
+  if (rows.length) totalH += 3.2 * S + 1 + 2.4 * S;
+  rows.forEach((r) => { totalH += r.lines.length * 4.7 * S + 1.6 * S; });
+  const x = m, y = H - m - totalH;
+  rr(ctx, x, y, cardW, totalH, 3.4 * S); ctx.fillStyle = 'rgba(8,10,13,0.60)'; ctx.fill();
+  ctx.lineWidth = Math.max(1, W * 0.0007); ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.stroke();
+  const grad = ctx.createLinearGradient(0, y, 0, y + totalH);
+  grad.addColorStop(0, '#FFD028'); grad.addColorStop(1, '#FF7A00');
+  rr(ctx, x + pad, y + pad, 1.25 * S, totalH - pad * 2, 999); ctx.fillStyle = grad; ctx.fill();
+  let cy = y + pad + 0.4 * S;
+  if (f.date) {
+    ctx.font = `700 ${9.2 * S}px ${MONO}`; ctx.fillStyle = '#FFFFFF';
+    ctx.fillText(d.hms, tx, cy + 8.6 * S);
+  }
+  cy += 11.8 * S;
+  const sub = [];
+  if (f.date) sub.push(d.dateCn);
+  if (f.weather && d.weather) sub.push(d.weather);
+  if (sub.length) {
+    ctx.font = `500 ${3.4 * S}px ${SANS}`; ctx.fillStyle = 'rgba(232,236,240,0.85)';
+    ctx.fillText(sub.join('  ·  '), tx, cy + dateRowH - 1.1 * S);
+    cy += dateRowH;
+  }
+  if (rows.length) {
+    cy += 3.2 * S;
+    ctx.beginPath(); ctx.moveTo(x + pad, cy); ctx.lineTo(x + cardW - pad, cy);
+    ctx.strokeStyle = 'rgba(255,255,255,0.22)'; ctx.lineWidth = Math.max(1, W * 0.0005);
+    ctx.setLineDash([2.2 * S, 2.2 * S]); ctx.stroke(); ctx.setLineDash([]);
+    cy += 2.4 * S;
+    rows.forEach((r) => {
+      ctx.font = r.mono ? `500 ${3.3 * S}px ${MONO}` : `500 ${3.45 * S}px ${SANS}`;
+      const fb = cy + 3.7 * S;
+      drawIcon(ctx, r.icon, tx, fb - 3 * S, 3.7 * S, '#FFD028');
+      r.lines.forEach((ln, i) => {
+        ctx.fillStyle = i === 0 ? 'rgba(255,255,255,0.96)' : 'rgba(230,234,238,0.9)';
+        ctx.fillText(r.mono ? ln : ellipsize(ctx, ln, contentW - 6.4 * S), tx + 6.4 * S, cy + 3.7 * S + i * 4.7 * S);
+      });
+      cy += r.lines.length * 4.7 * S + 1.6 * S;
+    });
+  }
+}
+
+/* ================= 数据与界面 ================= */
+let rows = []; // {file,url,img,name,time,lat,lng,addr,weather,note,status}
+
+function setStatus(txt) { $('#stat').textContent = txt; }
+function render() {
+  const tb = $('#tbody');
+  $('#tblWrap').style.display = rows.length ? '' : 'none';
+  $('#emptyTip').style.display = rows.length ? 'none' : '';
+  $('#btnGen').disabled = !rows.length;
+  $('#imgStat').textContent = rows.length ? `已导入 ${rows.length} 张` : '尚未导入';
+  tb.innerHTML = rows.map((r, i) => `
+    <tr>
+      <td>${i + 1}</td>
+      <td><img class="thumb" src="${r.url}" onclick="viewImg('${r.url}')" /></td>
+      <td class="fname" title="${r.name}">${r.name}</td>
+      <td><input type="datetime-local" value="${toLocalInput(r.time)}" onchange="setRow(${i},'time',this.value)" /></td>
+      <td><input value="${r.lat}" onchange="setRow(${i},'lat',this.value)" placeholder="纬度" /></td>
+      <td><input value="${r.lng}" onchange="setRow(${i},'lng',this.value)" placeholder="经度" /></td>
+      <td><input value="${r.addr}" onchange="setRow(${i},'addr',this.value)" placeholder="地址（可批量解析）" /></td>
+      <td><input value="${r.weather}" onchange="setRow(${i},'weather',this.value)" placeholder="天气" /></td>
+      <td><input value="${r.note}" onchange="setRow(${i},'note',this.value)" placeholder="施工内容" /></td>
+      <td><span class="tag ${r.status}" data-i="${i}" ${r.status === 'err' ? `onclick="retryRow(${i})"` : ''}>${({ wait: '待处理', doing: '…', done: '✓', err: '失败' })[r.status]}</span></td>
+    </tr>`).join('');
+}
+window.setRow = (i, k, v) => {
+  if (k === 'time') rows[i].time = new Date(v);
+  else rows[i][k] = v;
+};
+window.viewImg = (u) => { $('#viewerImg').src = u; $('#viewer').showModal(); };
+window.retryRow = (i) => { rows[i].status = 'wait'; render(); };
+
+$('#btnImg').onclick = () => $('#fileImg').click();
+$('#fileImg').onchange = async (e) => {
+  const files = [...e.target.files].filter((f) => /image\/(jpeg|png)/.test(f.type));
+  for (const f of files) {
+    const url = URL.createObjectURL(f);
+    const img = new Image();
+    const loaded = new Promise((res, rej) => { img.onload = res; img.onerror = rej; });
+    img.src = url;
+    await loaded.catch(() => {});
+    let time = null;
+    if (/jpeg/.test(f.type)) {
+      try { time = exifTime((await f.arrayBuffer()).slice(0, 400 * 1024)); } catch { /* ignore */ }
+    }
+    rows.push({
+      file: f, url, img, name: f.name,
+      time: time || new Date(f.lastModified),
+      lat: '', lng: '', addr: '', weather: '',
+      note: $('#defNote').value, status: 'wait',
+    });
+  }
+  e.target.value = '';
+  render();
+  log(`导入 ${files.length} 张图片，共 ${rows.length} 张`);
+};
+$('#btnClear').onclick = () => { rows.forEach((r) => URL.revokeObjectURL(r.url)); rows = []; render(); };
+
+$('#btnCoord').onclick = () => {
+  const lines = $('#coordBox').value.split('\n').map((l) => l.trim()).filter(Boolean);
+  if (!lines.length) { alert('请先粘贴坐标'); return; }
+  let hit = 0;
+  lines.forEach((l, i) => {
+    const c = parseCoordLine(l);
+    if (!c) { log(`第 ${i + 1} 行无法解析：${l}`); return; }
+    let target = null;
+    if (c.name) target = rows.find((r) => r.name === c.name || r.name.startsWith(c.name));
+    if (!target && rows[i]) target = rows[i];
+    if (target) {
+      target.lat = c.lat.toFixed(6); target.lng = c.lng.toFixed(6);
+      target.status = 'wait'; hit++;
+    }
+  });
+  render();
+  log(`坐标导入成功 ${hit} 条（共 ${lines.length} 行 / ${rows.length} 张图）`);
+};
+
+$('#btnAddr').onclick = async () => {
+  const list = rows.filter((r) => isFinite(parseFloat(r.lat)) && isFinite(parseFloat(r.lng)));
+  if (!list.length) { alert('请先导入坐标'); return; }
+  for (const r of list) {
+    r.status = 'doing'; render();
+    try {
+      let lat = parseFloat(r.lat), lng = parseFloat(r.lng);
+      if ($('#coordDatum').value === 'gcj02') {
+        const w = wgsBackward({ lat, lng }); // 反算等效 WGS，抵消 amapRegeo 内部正转
+        lat = w.lat; lng = w.lng;
+      }
+      const addr = await amapRegeo(lat, lng);
+      if (addr) { r.addr = addr; r.status = 'done'; } else r.status = 'err';
+    } catch { r.status = 'err'; }
+    render();
+    await sleep(350); // 高德 QPS 限制
+  }
+  log('地址解析完成');
+};
+function wgsBackward(g) {
+  // 迭代反算：把 gcj 当作目标求等效 wgs 输入
+  let wLat = g.lat, wLng = g.lng;
+  for (let i = 0; i < 3; i++) {
+    const c = wgs2gcj(wLat, wLng);
+    wLat += g.lat - c.lat; wLng += g.lng - c.lng;
+  }
+  return { lat: wLat, lng: wLng };
+}
+
+$('#btnWeather').onclick = async () => {
+  const list = rows.filter((r) => isFinite(parseFloat(r.lat)) && isFinite(parseFloat(r.lng)));
+  if (!list.length) { alert('请先导入坐标'); return; }
+  for (const r of list) {
+    const w = await weatherFor(parseFloat(r.lat), parseFloat(r.lng), r.time);
+    if (w) r.weather = w;
+    render();
+    await sleep(120);
+  }
+  log('天气匹配完成（按每行拍摄日期）');
+};
+
+/* ================= 生成与打包 ================= */
+function fields() {
+  return { date: $('#fDate').checked, addr: $('#fAddr').checked, coord: $('#fCoord').checked, weather: $('#fWeather').checked, project: $('#fProject').checked, note: $('#fNote').checked };
+}
+async function composeOne(r) {
+  const W = r.img.naturalWidth, H = r.img.naturalHeight;
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(r.img, 0, 0, W, H);
+  const d = {
+    address: r.addr,
+    siteTime: fmtSite(r.time),
+    latDms: `${Math.abs(parseFloat(r.lat) || 0).toFixed(6)}°${(parseFloat(r.lat) || 0) >= 0 ? 'N' : 'S'}`,
+    lngDms: `${Math.abs(parseFloat(r.lng) || 0).toFixed(6)}°${(parseFloat(r.lng) || 0) >= 0 ? 'E' : 'W'}`,
+    weather: r.weather,
+    project: $('#projName').value,
+    note: r.note,
+    hms: `${pad2(r.time.getHours())}:${pad2(r.time.getMinutes())}:${pad2(r.time.getSeconds())}`,
+    dateCn: `${r.time.getFullYear()} 年 ${r.time.getMonth() + 1} 月 ${r.time.getDate()} 日 星期${'日一二三四五六'[r.time.getDay()]}`,
+  };
+  const f = fields();
+  if ($('#wmStyle').value === 'site') drawSite(ctx, W, H, d, f);
+  else drawCard(ctx, W, H, d, f);
+  const blob = await new Promise((res) => canvas.toBlob(res, 'image/jpeg', 0.92));
+  return blob;
+}
+
+/* ZIP(store) 打包 */
+const CRC_T = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(u8) { let c = 0xffffffff; for (let i = 0; i < u8.length; i++) c = CRC_T[(c ^ u8[i]) & 0xff] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; }
+function makeZip(files) { // [{name, data:Uint8Array}]
+  const enc = new TextEncoder(); let off = 0; const locals = []; const cents = [];
+  const now = new Date();
+  const dosTime = (now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1);
+  const dosDate = ((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
+  for (const f of files) {
+    const nb = enc.encode(f.name);
+    const lh = new DataView(new ArrayBuffer(30));
+    lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true);
+    lh.setUint16(8, 0, true); lh.setUint16(10, dosTime, true); lh.setUint16(12, dosDate, true);
+    lh.setUint32(14, crc32(f.data), true); lh.setUint32(18, f.data.length, true); lh.setUint32(22, f.data.length, true);
+    lh.setUint16(26, nb.length, true);
+    locals.push(new Uint8Array(lh.buffer), nb, f.data);
+    const ch = new DataView(new ArrayBuffer(46));
+    ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(8, 0x0800, true);
+    ch.setUint16(10, 0, true); ch.setUint16(12, dosTime, true); ch.setUint16(14, dosDate, true);
+    ch.setUint32(16, crc32(f.data), true); ch.setUint32(20, f.data.length, true); ch.setUint32(24, f.data.length, true);
+    ch.setUint16(28, nb.length, true); ch.setUint32(42, off, true);
+    cents.push(new Uint8Array(ch.buffer), nb);
+    off += 30 + nb.length + f.data.length;
+  }
+  const cdSize = cents.reduce((a, c) => a + c.length, 0);
+  const eocd = new DataView(new ArrayBuffer(22));
+  eocd.setUint32(0, 0x06054b50, true); eocd.setUint16(8, files.length, true); eocd.setUint16(10, files.length, true);
+  eocd.setUint32(12, cdSize, true); eocd.setUint32(16, off, true);
+  return new Blob([...locals, ...cents, new Uint8Array(eocd.buffer)], { type: 'application/zip' });
+}
+
+$('#btnGen').onclick = async () => {
+  $('#btnGen').disabled = true;
+  try {
+    const files = [];
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      setStatus(`正在合成 ${i + 1}/${rows.length} …`);
+      const blob = await composeOne(r);
+      const base = r.name.replace(/\.(jpe?g|png)$/i, '');
+      files.push({ name: `水印_${base}_${fmtFile(r.time)}.jpg`, data: new Uint8Array(await blob.arrayBuffer()) });
+      r.status = 'done'; render();
+    }
+    const zip = makeZip(files);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(zip);
+    a.download = `天象七星批量水印_${fmtFile(new Date())}.zip`;
+    a.click();
+    setStatus(`完成 ${files.length} 张，已打包下载`);
+    log(`✅ 生成 ${files.length} 张水印图片并打包`);
+  } catch (e) {
+    log('生成失败：' + e.message);
+  }
+  $('#btnGen').disabled = false;
+};
+
+render();
+</script>
+</body>
+</html>

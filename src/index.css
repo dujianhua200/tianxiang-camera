@@ -1,0 +1,133 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Noto Sans SC", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Noto Sans Mono", ui-monospace, monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: #05070a;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ---------- Leaflet ---------- */
+.geo-map {
+  z-index: 0;
+}
+.leaflet-container {
+  background: #0d1216;
+  font-family: "Noto Sans SC", sans-serif;
+  outline: none;
+}
+.leaflet-control-attribution {
+  background: rgba(0, 0, 0, 0.5) !important;
+  color: rgba(255, 255, 255, 0.4) !important;
+  font-size: 9px !important;
+  padding: 1px 6px;
+  border-radius: 8px 0 0 0;
+}
+.leaflet-control-attribution a {
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+.leaflet-bar {
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  border-radius: 10px !important;
+  overflow: hidden;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4) !important;
+}
+.leaflet-bar a {
+  background: rgba(10, 13, 16, 0.85) !important;
+  color: #fff !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+  backdrop-filter: blur(4px);
+}
+.leaflet-bar a:hover {
+  background: rgba(255, 208, 40, 0.92) !important;
+  color: #000 !important;
+}
+.leaflet-interactive:focus {
+  outline: none;
+}
+
+/* ---------- 地图标记 ---------- */
+.geo-pin-wrap {
+  background: transparent;
+  border: none;
+}
+.geo-pin {
+  position: relative;
+  width: 36px;
+  height: 48px;
+}
+.geo-pin-head {
+  position: absolute;
+  left: 50%;
+  top: 2px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50% 50% 50% 0;
+  transform: translateX(-50%) rotate(-45deg);
+  background: linear-gradient(135deg, #ffd028, #ff8a00);
+  border: 2px solid #14171b;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.55);
+}
+.geo-pin-head span {
+  position: absolute;
+  inset: 5.5px;
+  background: #10131a;
+  border-radius: 50%;
+}
+.geo-pin-pulse {
+  position: absolute;
+  left: 50%;
+  top: 41px;
+  width: 8px;
+  height: 8px;
+  background: rgba(255, 208, 40, 0.55);
+  border-radius: 50%;
+  animation: pin-pulse 1.6s ease-out infinite;
+}
+.geo-pin-shadow {
+  position: absolute;
+  left: 50%;
+  top: 41px;
+  width: 14px;
+  height: 5px;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.45);
+  border-radius: 50%;
+  filter: blur(1.5px);
+}
+@keyframes pin-pulse {
+  0% {
+    transform: translateX(-50%) scale(0.5);
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateX(-50%) scale(3.4);
+    opacity: 0;
+  }
+}
+
+/* ---------- 滚动条 ---------- */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 208, 40, 0.45);
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}

@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>天象云台账 · 管理后台</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  :root { --bg:#0b0e12; --card:#14181e; --line:#232a33; --txt:#e8ecf0; --dim:#8b95a1; --gold:#FFD028; --ok:#34d399; --warn:#fbbf24; --bad:#f87171; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--txt); font:14px/1.6 "PingFang SC","Microsoft YaHei",system-ui,sans-serif; }
+  header { position:sticky; top:0; z-index:900; background:rgba(11,14,18,.94); backdrop-filter:blur(8px); border-bottom:1px solid var(--line); padding:12px 18px; display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+  h1 { font-size:16px; letter-spacing:.05em; } h1 em { color:var(--gold); font-style:normal; }
+  .tabs { display:flex; gap:6px; }
+  .tabs button { background:transparent; color:var(--dim); border:1px solid transparent; border-radius:8px; padding:6px 14px; font-size:13px; cursor:pointer; }
+  .tabs button.on { background:var(--gold); color:#111; font-weight:700; }
+  .sp { flex:1; }
+  input,select,button { background:var(--card); color:var(--txt); border:1px solid var(--line); border-radius:8px; padding:7px 10px; font-size:13px; outline:none; }
+  input:focus,select:focus { border-color:var(--gold); }
+  button { cursor:pointer; }
+  .gold { background:var(--gold); color:#111 !important; font-weight:700; border:none; }
+  .ghost:hover { border-color:var(--gold); color:var(--gold); }
+  main { padding:14px 18px 60px; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin-bottom:14px; }
+  .kpi { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 16px; }
+  .kpi .n { font-size:26px; font-weight:800; color:var(--gold); font-variant-numeric:tabular-nums; }
+  .kpi .t { font-size:12px; color:var(--dim); }
+  .days { display:flex; flex-wrap:wrap; gap:8px; }
+  .day { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:8px 12px; font-size:12px; cursor:pointer; }
+  .day b { color:var(--gold); font-size:15px; margin-left:6px; }
+  .day:hover { border-color:var(--gold); }
+  .bar { display:flex; align-items:center; gap:10px; margin:6px 0; font-size:12px; }
+  .bar .lab { width:92px; color:var(--dim); }
+  .bar .tr { flex:1; background:#1a2028; border-radius:6px; height:16px; overflow:hidden; }
+  .bar .fl { background:linear-gradient(90deg,#FFD028,#FF9500); height:100%; border-radius:6px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:12px; }
+  .cell { background:var(--card); border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+  .cell img { width:100%; height:220px; object-fit:cover; display:block; background:#000; cursor:zoom-in; }
+  .cell .b { padding:8px 10px; font-size:12px; }
+  .cell .t { color:var(--gold); font-weight:600; }
+  .cell .m { color:var(--dim); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .tblwrap { overflow:auto; border:1px solid var(--line); border-radius:12px; }
+  table { width:100%; border-collapse:collapse; font-size:12.5px; }
+  th,td { border-bottom:1px solid var(--line); padding:7px 9px; text-align:left; white-space:nowrap; }
+  th { background:#1a2028; color:var(--gold); position:sticky; top:0; }
+  tr:hover td { background:#171c23; }
+  td img { height:54px; border-radius:6px; cursor:zoom-in; display:block; }
+  .badge { display:inline-block; padding:2px 10px; border-radius:99px; font-size:11px; font-weight:600; }
+  .b-ok { background:rgba(52,211,153,.15); color:var(--ok); }
+  .b-pending { background:rgba(251,191,36,.15); color:var(--warn); }
+  .b-blocked { background:rgba(248,113,113,.15); color:var(--bad); }
+  .op { color:var(--gold); cursor:pointer; margin-right:10px; font-size:12px; }
+  .op.red { color:var(--bad); }
+  #map { height:calc(100vh - 190px); min-height:420px; border-radius:12px; border:1px solid var(--line); }
+  .hide { display:none !important; }
+  .empty { text-align:center; color:var(--dim); padding:56px 0; }
+  dialog { background:var(--card); color:var(--txt); border:1px solid var(--line); border-radius:14px; max-width:92vw; }
+  dialog::backdrop { background:rgba(0,0,0,.75); }
+  dialog img { max-height:80vh; display:block; }
+  .login { max-width:360px; margin:14vh auto 0; background:var(--card); border:1px solid var(--line); border-radius:16px; padding:30px 28px; }
+  .login h2 { font-size:18px; margin-bottom:6px; } .login h2 em { color:var(--gold); font-style:normal; }
+  .login p { color:var(--dim); font-size:12px; margin-bottom:18px; }
+  .login input { width:100%; margin-bottom:12px; }
+  .login .gold { width:100%; padding:10px; }
+  .filters { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; align-items:center; }
+  .leaflet-popup-content { font-size:12px; } .leaflet-popup-content img { width:150px; border-radius:6px; display:block; margin-bottom:6px; }
+</style>
+</head>
+<body>
+<div id="loginWrap" class="login">
+  <h2><em>天象云台账</em> 管理后台</h2>
+  <p>请输入管理密码（compose 里的 ADMIN_PASSWORD）</p>
+  <input id="pw" type="password" placeholder="管理密码" onkeydown="if(event.key==='Enter')login()" />
+  <button class="gold" onclick="login()">登 录</button>
+  <div id="loginErr" style="color:var(--bad);font-size:12px;margin-top:10px"></div>
+</div>
+
+<div id="app" class="hide">
+<header>
+  <h1><em>天象云台账</em></h1>
+  <div class="tabs">
+    <button data-t="dash" class="on">概览</button>
+    <button data-t="ledger">台账</button>
+    <button data-t="map">地图</button>
+    <button data-t="devices">设备</button>
+  </div>
+  <span class="sp"></span>
+  <span id="stat" style="font-size:12px;color:var(--dim)"></span>
+  <button class="ghost" onclick="logout()">退出</button>
+</header>
+<main>
+  <section id="v-dash">
+    <div class="cards" id="kpis"></div>
+    <div style="font-size:13px;color:var(--dim);margin:10px 0 6px">每日拍照量（点日卡片跳到台账当日）</div>
+    <div class="days" id="dayCards"></div>
+    <div style="font-size:13px;color:var(--dim);margin:16px 0 6px">工程分布</div>
+    <div id="projBars"></div>
+  </section>
+
+  <section id="v-ledger" class="hide">
+    <div class="filters">
+      <select id="fDay"><option value="">全部日期</option></select>
+      <select id="fProj"><option value="">全部工程</option></select>
+      <select id="fDev"><option value="">全部设备</option></select>
+      <input id="fKw" placeholder="关键字" style="width:110px" />
+      <button class="gold" onclick="loadLedger()">查询</button>
+      <button class="ghost" onclick="dl('csv')">导出 CSV</button>
+      <button class="ghost" onclick="dl('xlsx')">导出 Excel（照片嵌入）</button>
+      <label style="font-size:12px;color:var(--dim);margin-left:8px"><input type="checkbox" id="wallMode" style="width:auto" onchange="loadLedger()"> 照片墙视图</label>
+    </div>
+    <div id="wall" class="grid"></div>
+    <div id="tbl" class="tblwrap"></div>
+    <div id="none" class="empty hide">暂无记录 —— 手机 App「家云同步」开启后拍照即自动入库</div>
+  </section>
+
+  <section id="v-map" class="hide">
+    <div class="filters">
+      <select id="mDay" onchange="loadMap()"></select>
+      <span style="font-size:12px;color:var(--dim)">按天查看拍照点位 · 点击标记看照片</span>
+    </div>
+    <div id="map"></div>
+  </section>
+
+  <section id="v-devices" class="hide">
+    <div class="filters"><span style="font-size:12px;color:var(--dim)">新设备用邀请码注册后进入「待审批」，同意后才能上传照片；可随时封禁/解封</span></div>
+    <div class="tblwrap"><table id="devTbl"></table></div>
+  </section>
+</main>
+</div>
+<dialog id="viewer"><img id="viewerImg" alt="" /></dialog>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const $ = (s) => document.querySelector(s);
+let A = localStorage.getItem('tx.admin') || '';
+let rows = [], days = [], map = null, layer = null;
+const esc = (s) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+async function api(path, opt) {
+  const sep = path.includes('?') ? '&' : '?';
+  const r = await fetch(path + sep + 'admin=' + encodeURIComponent(A), opt);
+  const j = await r.json().catch(() => ({ ok:false }));
+  if (r.status === 401 && path !== '/api/admin/login') { logout(); throw new Error('登录失效'); }
+  return j;
+}
+async function login() {
+  const j = await fetch('/api/admin/login', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ password: $('#pw').value }) }).then(r=>r.json());
+  if (!j.ok) { $('#loginErr').textContent = '密码错误'; return; }
+  A = j.admin; localStorage.setItem('tx.admin', A);
+  boot();
+}
+function logout() { localStorage.removeItem('tx.admin'); A=''; $('#app').classList.add('hide'); $('#loginWrap').classList.remove('hide'); }
+function boot() { $('#loginWrap').classList.add('hide'); $('#app').classList.remove('hide'); dash(); }
+
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('.tabs button').forEach(x=>x.className='');
+  b.className = 'on';
+  ['dash','ledger','map','devices'].forEach(t => $('#v-'+t).classList.toggle('hide', t!==b.dataset.t));
+  if (b.dataset.t==='dash') dash();
+  if (b.dataset.t==='ledger') loadLedger();
+  if (b.dataset.t==='map') initMap();
+  if (b.dataset.t==='devices') devices();
+});
+
+async function dash() {
+  const s = await api('/api/stats');
+  $('#kpis').innerHTML = [
+    ['照片总数', s.total], ['今日新增', s.today], ['已授权设备', s.active], ['待审批设备', s.pending],
+  ].map(([t,n]) => `<div class="kpi"><div class="n">${n}</div><div class="t">${t}</div></div>`).join('');
+  days = (s.days||[]).map(([d])=>d);
+  const max = Math.max(1, ...s.days.map(x=>x[1]));
+  $('#dayCards').innerHTML = s.days.map(([d,n]) =>
+    `<div class="day" onclick="gotoDay('${d}')">${d}<b>${n}</b></div>`).join('') || '<span style="color:var(--dim);font-size:12px">暂无数据</span>';
+  const pj = Object.entries(s.projects||{}).sort((a,b)=>b[1]-a[1]);
+  const pmax = Math.max(1, ...pj.map(x=>x[1]));
+  $('#projBars').innerHTML = pj.map(([p,n]) =>
+    `<div class="bar"><span class="lab" title="${esc(p)}">${esc(p.slice(0,8))}</span><div class="tr"><div class="fl" style="width:${Math.round(n/pmax*100)}%"></div></div><span>${n}</span></div>`).join('');
+  fillSelect('#fDay', days); fillSelect('#mDay', days);
+}
+function fillSelect(sel, arr) {
+  const el = $(sel), cur = el.value;
+  el.innerHTML = (sel==='#fDay' ? '<option value="">全部日期</option>' : '') + arr.map(d=>`<option ${d===cur?'selected':''}>${d}</option>`).join('');
+}
+function gotoDay(d) { document.querySelector('[data-t=ledger]').click(); setTimeout(()=>{ $('#fDay').value=d; loadLedger(); }, 60); }
+
+function qs() {
+  const p = new URLSearchParams();
+  if ($('#fDay').value) p.set('day', $('#fDay').value);
+  if ($('#fProj').value) p.set('project', $('#fProj').value);
+  if ($('#fDev').value) p.set('device', $('#fDev').value);
+  if ($('#fKw').value.trim()) p.set('kw', $('#fKw').value.trim());
+  return p;
+}
+async function loadLedger() {
+  const j = await api('/api/list?' + qs().toString());
+  rows = j.rows || [];
+  $('#stat').textContent = `共 ${j.total} 张`;
+  const pj = await api('/api/projects');
+  fillOpts('#fProj', Object.keys(pj.projects||{}));
+  const dv = await api('/api/admin/devices');
+  fillOpts('#fDev', (dv.devices||[]).filter(d=>d.status==='ok').map(d=>({v:d.id,l:d.name})));
+  const wall = $('#wallMode').checked;
+  $('#wall').classList.toggle('hide', !wall); $('#tbl').classList.toggle('hide', wall);
+  $('#none').classList.toggle('hide', rows.length>0);
+  if (wall) {
+    $('#wall').innerHTML = rows.map(r => `<div class="cell"><img loading="lazy" src="${esc(r.url)}" onclick="view('${esc(r.url)}')"/><div class="b"><div class="t">${esc(r.note||r.project||r.fileName)}</div><div class="m">${esc(r.time||'')}</div><div class="m">${esc(r.addr||'')}</div><div class="m">${esc(r.deviceName||'')} · <span class="op red" onclick="del('${esc(r.id)}')">删除</span></div></div></div>`).join('');
+  } else {
+    $('#tbl').innerHTML = '<table><tr><th>照片</th><th>时间</th><th>施工内容</th><th>工程</th><th>地址</th><th>纬度</th><th>经度</th><th>天气</th><th>设备</th><th>操作</th></tr>' +
+      rows.map(r => `<tr><td><img loading="lazy" src="${esc(r.url)}" onclick="view('${esc(r.url)}')"/></td><td>${esc(r.time)}</td><td>${esc(r.note)}</td><td>${esc(r.project)}</td><td>${esc(r.addr)}</td><td>${esc(r.lat)}</td><td>${esc(r.lng)}</td><td>${esc(r.weather)}</td><td>${esc(r.deviceName)}</td><td><span class="op red" onclick="del('${esc(r.id)}')">删除</span></td></tr>`).join('') + '</table>';
+  }
+}
+function fillOpts(sel, items) {
+  const el = $(sel), cur = el.value;
+  const first = el.querySelector('option') ? el.options[0].outerHTML : '';
+  el.innerHTML = first + items.map(i => { const v = i.v || i, l = i.l || i; return `<option value="${esc(v)}" ${v===cur?'selected':''}>${esc(l)}</option>`; }).join('');
+}
+async function dl(kind) {
+  location.href = '/api/export.' + kind + '?admin=' + encodeURIComponent(A) + '&' + qs().toString();
+}
+async function del(id) {
+  if (!confirm('删除这条台账及照片？')) return;
+  await api('/api/delete?id=' + encodeURIComponent(id) + '&', { method:'DELETE' });
+  loadLedger();
+}
+function view(url) { $('#viewerImg').src = url; $('#viewer').showModal(); }
+
+async function initMap() {
+  if (!map) {
+    map = L.map('map', { zoomControl: true });
+    L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
+      subdomains:['1','2','3','4'], maxZoom:19, attribution:'© 高德地图'
+    }).addTo(map);
+    layer = L.layerGroup().addTo(map);
+  }
+  setTimeout(()=>map.invalidateSize(), 80);
+  loadMap();
+}
+async function loadMap() {
+  if (!map) return;
+  const day = $('#mDay').value;
+  const j = await api('/api/list?' + (day ? 'day='+day : ''));
+  layer.clearLayers();
+  const pts = [];
+  for (const r of j.rows||[]) {
+    if (r.latNum==null || r.lngNum==null) continue;
+    pts.push([r.latNum, r.lngNum]);
+    L.circleMarker([r.latNum, r.lngNum], { radius:8, color:'#FFD028', weight:2, fillColor:'#FFD028', fillOpacity:.55 })
+      .bindPopup(`<img src="${r.url}"/><b>${esc(r.note||r.fileName)}</b><br>${esc(r.time||'')}<br>${esc(r.addr||'')}`).addTo(layer);
+  }
+  if (pts.length) map.fitBounds(pts, { padding:[40,40], maxZoom:16 });
+  else map.setView([36, 108], 4);
+}
+
+async function devices() {
+  const j = await api('/api/admin/devices');
+  const badge = { ok:'<span class="badge b-ok">已授权</span>', pending:'<span class="badge b-pending">待审批</span>', blocked:'<span class="badge b-blocked">已封禁</span>' };
+  $('#devTbl').innerHTML = '<tr><th>设备名称</th><th>状态</th><th>注册时间</th><th>最近上传</th><th>照片数</th><th>操作</th></tr>' +
+    (j.devices||[]).map(d => `<tr><td>${esc(d.name)}<div style="color:var(--dim);font-size:11px">${esc(d.id)}</div></td><td>${badge[d.status]||d.status}</td><td>${esc(d.createdAt)}</td><td>${esc(d.lastSeen||'—')}</td><td>${d.count||0}</td><td>${
+      d.status==='pending' ? `<span class="op" onclick="setDev('${d.id}','ok')">同意</span><span class="op red" onclick="setDev('${d.id}','blocked')">拒绝</span>` :
+      d.status==='ok' ? `<span class="op red" onclick="setDev('${d.id}','blocked')">封禁</span>` :
+      `<span class="op" onclick="setDev('${d.id}','ok')">解封</span>`
+    }<span class="op red" onclick="delDev('${d.id}')">删除</span></td></tr>`).join('') || '<tr><td colspan="6" style="color:var(--dim)">暂无设备注册</td></tr>';
+}
+async function setDev(id, status) { await api(`/api/admin/set?id=${encodeURIComponent(id)}&status=${status}&`); devices(); }
+async function delDev(id) { if(!confirm('删除该设备记录？')) return; await api('/api/admin/del-device?id=' + encodeURIComponent(id) + '&'); devices(); }
+
+if (A) boot();
+</script>
+</body>
+</html>

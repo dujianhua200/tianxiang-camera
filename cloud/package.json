@@ -1,0 +1,8 @@
+{
+  "name": "tianxiang-ledger",
+  "private": true,
+  "type": "commonjs",
+  "dependencies": {
+    "exceljs": "^4.4.0"
+  }
+}

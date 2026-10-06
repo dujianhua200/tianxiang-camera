@@ -1,0 +1,11 @@
+node_modules/
+dist/
+out/
+*.apk
+*.idsig
+*.log
+.DS_Store
+pc/dist/
+cloud/data/
+android/assets/www/
+android/out/

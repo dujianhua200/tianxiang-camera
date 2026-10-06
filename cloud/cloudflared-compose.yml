@@ -1,0 +1,12 @@
+# 可选：外网访问加速——Cloudflare Tunnel（需要 Cloudflare 账号 + 托管域名）
+# 1) dash.cloudflare.com → Zero Trust → Networks → Tunnels → Create tunnel → 复制 token
+# 2) 本文件粘贴到飞牛 Docker → Compose 新项目 → 替换 token → 启动
+# 3) 隧道页 Public Hostname 添加：子域名 ledger + 你的域名 → Service: http://localhost:9800
+# 4) App 家云同步地址填 https://ledger.你的域名
+services:
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    restart: unless-stopped
+    network_mode: host
+    command: tunnel --no-autoupdate run --token 粘贴你的隧道令牌
