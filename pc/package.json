@@ -27,6 +27,7 @@
         "portable",
         "zip"
       ],
+      "signAndEditExecutable": false,
       "icon": null,
       "artifactName": "${productName}.${ext}"
     }
