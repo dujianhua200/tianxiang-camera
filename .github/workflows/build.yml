@@ -42,13 +42,14 @@ jobs:
         with:
           name: web-dist
           path: web-dist
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
-      - name: Install SDK packages
-        run: sdkmanager --install "platforms;android-34" "build-tools;34.0.0"
+      - name: Install SDK packages (runner 预装 SDK，直接补装所需包)
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager --install "platforms;android-34" "build-tools;34.0.0"
       - name: Derive version from tag
         id: ver
         run: |
