@@ -48,8 +48,9 @@ jobs:
           java-version: '17'
       - name: Install SDK packages (runner 预装 SDK，直接补装所需包)
         run: |
-          yes | sdkmanager --licenses > /dev/null || true
-          sdkmanager --install "platforms;android-34" "build-tools;34.0.0"
+          SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+          "$SDKMANAGER" --install "platforms;android-34" "build-tools;34.0.0"
       - name: Derive version from tag
         id: ver
         run: |
