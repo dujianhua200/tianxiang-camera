@@ -1,0 +1,144 @@
+# 天象七星构建：Web 单文件 + Android APK + Windows 便携版
+# push/PR 只做编译检查；打 v* tag（如 v1.01）后自动出包并创建 Release。
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - name: Build web (single file)
+        run: npm run build
+        env:
+          # 仓库 Secrets 里配 AMAP_KEY 即可在构建时注入高德 Key（不进源码）
+          VITE_AMAP_KEY: ${{ secrets.AMAP_KEY }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: dist
+
+  android:
+    needs: web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: web-dist
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install SDK packages
+        run: sdkmanager --install "platforms;android-34" "build-tools;34.0.0"
+      - name: Derive version from tag
+        id: ver
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            TAG="${GITHUB_REF#refs/tags/v}"
+          else
+            TAG=""
+          fi
+          if [ -n "$TAG" ]; then
+            echo "vname=$TAG" >> "$GITHUB_OUTPUT"
+            echo "vcode=$(echo "$TAG" | tr -cd '0-9')" >> "$GITHUB_OUTPUT"
+          else
+            echo "vname=1.01-dev" >> "$GITHUB_OUTPUT"
+            echo "vcode=101" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Build APK (aapt2/d8 pipeline, no Gradle)
+        run: |
+          set -e
+          mkdir -p android/assets/www
+          cp -r web-dist/* android/assets/www/
+          sed -i 's/android:versionCode="[0-9]*"/android:versionCode="${{ steps.ver.outputs.vcode }}"/; s/android:versionName="[^"]*"/android:versionName="${{ steps.ver.outputs.vname }}"/' android/AndroidManifest.xml
+          BT="$ANDROID_SDK_ROOT/build-tools/34.0.0"
+          PLATFORM="$ANDROID_SDK_ROOT/platforms/android-34/android.jar"
+          ROOT="$PWD/android"
+          OUT="$ROOT/out"
+          rm -rf "$OUT" && mkdir -p "$OUT/res_flats" "$OUT/gen" "$OUT/classes" "$OUT/dex"
+          "$BT/aapt2" compile -o "$OUT/res.zip" --dir "$ROOT/res"
+          "$BT/aapt2" link -o "$OUT/base.apk" -I "$PLATFORM" \
+            --manifest "$ROOT/AndroidManifest.xml" --java "$OUT/gen" \
+            -A "$ROOT/assets" --min-sdk-version 26 --target-sdk-version 34 "$OUT/res.zip"
+          find "$ROOT/src" -name '*.java' > "$OUT/srcs.txt"
+          javac --release 17 -cp "$PLATFORM" -d "$OUT/classes" @"$OUT/srcs.txt" "$OUT/gen/com/yuntu/geocam/R.java"
+          CLASSES=$(find "$OUT/classes" -name '*.class')
+          # shellcheck disable=SC2086
+          "$BT/d8" --min-api 26 --output "$OUT/dex/" --lib "$PLATFORM" $CLASSES
+          cp "$OUT/base.apk" "$OUT/unsigned.apk"
+          (cd "$OUT/dex" && zip -q -u "$OUT/unsigned.apk" classes.dex)
+          "$BT/zipalign" -f -p 4 "$OUT/unsigned.apk" "$OUT/aligned.apk"
+          "$BT/apksigner" sign --ks "$ROOT/debug.keystore" --ks-key-alias androiddebugkey \
+            --ks-pass pass:android --key-pass pass:android \
+            --out "天象七星-${{ steps.ver.outputs.vname }}.apk" "$OUT/aligned.apk"
+          "$BT/apksigner" verify --print-certs "天象七星-${{ steps.ver.outputs.vname }}.apk" | head -5
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk
+          path: 天象七星-*.apk
+
+  pc-win:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: pc/package-lock.json
+      - run: npm ci
+        working-directory: pc
+      - name: Build Windows portable
+        run: npx electron-builder --win portable --x64
+        working-directory: pc
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pc-win
+          path: pc/dist/*.exe
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [web, android, pc-win]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/天象七星-*.apk
+            artifacts/*.exe
+            artifacts/web-dist/index.html
+          body: |
+            ## 滑洲天象七星 ${{ github.ref_name }}
+
+            - 📱 Android：`天象七星-*.apk`（现场拍摄水印相机）
+            - 🖥️ Windows：`天象七星批量水印.exe`（桌面批量水印工具，免安装）
+            - 🌐 `index.html`：单文件网页版（可直接浏览器打开）
+
+            首次使用请先在 App「水印编辑 → 地点」填入自己的高德 Web Key；
+            云台账部署前务必修改默认口令（见 README 安全必读）。
