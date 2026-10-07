@@ -2,7 +2,7 @@
  * 版式：深色表头（工程名/日期/天气/拍摄人/照片数）+ 双列照片 + 每张下标注时间地点。
  */
 export interface DiaryPhoto {
-  img: HTMLImageElement;
+  img: HTMLImageElement | HTMLCanvasElement;
   time: string; // 2026.10.07 10:22
   address: string;
 }
@@ -68,9 +68,9 @@ export async function buildDiaryImage(photos: DiaryPhoto[], meta: DiaryMeta): Pr
       roundRect(ctx, x, y, cellW, cellH, 14);
       ctx.fill();
       ctx.stroke();
-      // 图：contain
-      const iw = p.img.naturalWidth || p.img.width;
-      const ih = p.img.naturalHeight || p.img.height;
+      // 图：contain（img 可能是原图 Image，也可能是降采样 Canvas）
+      const iw = (p.img as HTMLImageElement).naturalWidth || p.img.width;
+      const ih = (p.img as HTMLImageElement).naturalHeight || p.img.height;
       const sc = Math.min(cellW / iw, IMG_H / ih);
       const dw = iw * sc, dh = ih * sc;
       ctx.save();
@@ -127,4 +127,25 @@ export function loadImage(dataUrl: string): Promise<HTMLImageElement> {
     img.onerror = () => reject(new Error('图片加载失败'));
     img.src = dataUrl;
   });
+}
+
+/**
+ * 拼图用降采样加载：单元格实际只显示约 736×460，
+ * 原图（4000×3000）全载入内存 40 张即 OOM。
+ * 宽边压到 maxW 后再拼图，单张内存从 ~48MB 降到 ~2MB。
+ */
+export async function loadThumb(dataUrl: string, maxW: number): Promise<HTMLCanvasElement> {
+  const img = await loadImage(dataUrl);
+  try {
+    const iw = img.naturalWidth || img.width;
+    const ih = img.naturalHeight || img.height;
+    const sc = Math.min(1, maxW / Math.max(1, iw));
+    const cv = document.createElement('canvas');
+    cv.width = Math.max(1, Math.round(iw * sc));
+    cv.height = Math.max(1, Math.round(ih * sc));
+    cv.getContext('2d')!.drawImage(img, 0, 0, cv.width, cv.height);
+    return cv;
+  } finally {
+    img.src = ''; // 释放原图解码内存
+  }
 }

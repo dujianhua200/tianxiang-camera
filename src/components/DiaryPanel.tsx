@@ -2,7 +2,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { X, Download, Images, FolderOpen, Loader2 } from 'lucide-react';
 import type { Shot } from './CaptureModal';
-import { buildDiaryImage, loadImage, DiaryPhoto } from '../lib/diary';
+import { buildDiaryImage, loadThumb, DiaryPhoto } from '../lib/diary';
 import { parseExifTime } from '../lib/exif';
 
 interface Props {
@@ -78,7 +78,7 @@ export default function DiaryPanel({ open, onClose, shots, project, weather, pho
     setResult(null);
     try {
       const photos: DiaryPhoto[] = [];
-      for (const it of list) photos.push({ img: await loadImage(it.url), time: it.time, address: it.address });
+      for (const it of list) photos.push({ img: await loadThumb(it.url, 800), time: it.time, address: it.address });
       const url = await buildDiaryImage(photos, meta);
       setResult(url);
     } finally {

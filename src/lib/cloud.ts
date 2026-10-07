@@ -345,13 +345,27 @@ export function readQueue(): QueueItem[] {
 }
 
 export function enqueue(item: QueueItem) {
+  const q = readQueue();
+  q.push(item);
+  while (q.length > 5) q.shift(); // 只保最近 5 张
   try {
-    const q = readQueue();
-    q.push(item);
-    while (q.length > 5) q.shift(); // 只保最近 5 张
     localStorage.setItem(K_QUEUE, JSON.stringify(q));
   } catch {
-    /* 超配额丢弃最旧策略已尽力 */
+    // 超配额：逐张丢弃最旧直到能存下，最新一张永远优先保留
+    while (q.length > 1) {
+      q.shift();
+      try {
+        localStorage.setItem(K_QUEUE, JSON.stringify(q));
+        return;
+      } catch {
+        /* 继续丢更旧的 */
+      }
+    }
+    try {
+      localStorage.removeItem(K_QUEUE);
+    } catch {
+      /* ignore */
+    }
   }
 }
 
