@@ -305,7 +305,10 @@ export function flushQueueAsync(cfg: CloudCfg, done?: (n: number, fails: string[
     const it = q[i];
     const finish = (r: string) => {
       if (r === 'ok') n++;
-      else {
+      else if (r === 'blocked' || r === 'bad-invite') {
+        /* 永久失败：封禁/邀请码错误重试无意义，直接丢弃不再占队列 */
+        fails.push(r);
+      } else {
         fails.push(r);
         rest.push(it);
       }

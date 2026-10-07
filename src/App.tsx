@@ -13,6 +13,7 @@ import {
   ImagePlus,
   BookOpen,
   Map as MapIcon,
+  Wrench,
 } from 'lucide-react';
 import WatermarkCard from './components/WatermarkCard';
 import MapPanel from './components/MapPanel';
@@ -20,7 +21,8 @@ import EditPanel, { Settings } from './components/EditPanel';
 import CaptureModal, { Shot } from './components/CaptureModal';
 import DiaryPanel from './components/DiaryPanel';
 import DistMapPanel from './components/DistMapPanel';
-import { logTrackPoint } from './lib/track';
+import { logTrackPoint, dayStr, getShotCount, incShotCount } from './lib/track';
+import { checkQuality, qualityAdvice } from './lib/quality';
 import { composePhoto, WatermarkData } from './lib/capture';
 import { parseExifTime, parseExifGps } from './lib/exif';
 import { NOTE_PRESETS } from './lib/presets';
@@ -100,6 +102,38 @@ const DEFAULT_SETTINGS: Settings = {
 
 type CamStatus = 'loading' | 'live' | 'fallback';
 
+/** 顶栏工具弹出菜单的行项 */
+function ToolItem({
+  icon,
+  label,
+  checked,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  checked?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[13px] text-white/80 transition hover:bg-white/10 hover:text-white"
+    >
+      <span className={checked ? 'text-[#FFD028]' : 'text-white/55'}>{icon}</span>
+      <span className="flex-1">{label}</span>
+      {checked !== undefined && (
+        <span
+          className={`relative h-5 w-9 rounded-full transition ${checked ? 'bg-[#FFD028]' : 'bg-white/15'}`}
+        >
+          <span
+            className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${checked ? 'left-[18px]' : 'left-0.5'}`}
+          />
+        </span>
+      )}
+    </button>
+  );
+}
+
 export default function App() {
   /* ---------- 基础状态 ---------- */
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
@@ -142,6 +176,10 @@ export default function App() {
   const [diaryOpen, setDiaryOpen] = useState(false);
   const [distMapOpen, setDistMapOpen] = useState(false);
   const trackOnRef = useRef(true);
+  const [todayCount, setTodayCount] = useState(() => getShotCount());
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const [shotBusy, setShotBusy] = useState(false);
+  const shutterBusyRef = useRef(false);
   useEffect(() => {
     trackOnRef.current = settings.trackOn;
   }, [settings.trackOn]);
@@ -385,6 +423,7 @@ export default function App() {
       id: Date.now(),
       url,
       timeLabel: `${fmtDate(d)} ${fmtTime(d)}`,
+      day: dayStr(d),
       address: data.address === '位置解析中…' ? '' : data.address,
       latStr: data.latStr,
       lngStr: data.lngStr,
@@ -392,6 +431,7 @@ export default function App() {
       photoUri,
     };
     setShots((s) => [shot, ...s].slice(0, 10));
+    setTodayCount(incShotCount(dayStr(d)));
     const meta: CloudMeta = {
       fileName: shot.fileName,
       project: settings.project,
@@ -454,6 +494,10 @@ export default function App() {
   };
 
   const onShutter = async () => {
+    /* 连点保护：合成是异步重操作，重叠触发会出重片并爆内存 */
+    if (shutterBusyRef.current) return;
+    shutterBusyRef.current = true;
+    setShotBusy(true);
     navigator.vibrate?.(18);
     setFlash(true);
     setTimeout(() => setFlash(false), 480);
@@ -471,8 +515,21 @@ export default function App() {
         wmAlpha: settings.wmAlpha,
       });
       finalizeShot(url, data, effDate);
+      /* 端侧影像质检：只提示不拦截 */
+      try {
+        const probe = new Image();
+        probe.src = url;
+        await probe.decode();
+        const advice = qualityAdvice(checkQuality(probe));
+        if (advice) setTimeout(() => showToast(advice), 900);
+      } catch {
+        /* 质检失败不打扰 */
+      }
     } catch {
       showToast('画面未就绪，请稍候');
+    } finally {
+      shutterBusyRef.current = false;
+      setShotBusy(false);
     }
   };
 
@@ -626,7 +683,12 @@ export default function App() {
             <Crosshair size={19} className="text-black" />
           </div>
           <div>
-            <div className="text-[14px] font-bold leading-tight tracking-wide">滑洲天象七星</div>
+            <div className="flex items-center gap-2 text-[14px] font-bold leading-tight tracking-wide">
+              滑洲天象七星
+              <span className="rounded-full border border-[#FFD028]/35 bg-[#FFD028]/10 px-2 py-[1px] text-[10px] font-semibold text-[#FFD028]">
+                今日 {todayCount} 张
+              </span>
+            </div>
             <div className="font-mono text-[9.5px] tracking-[0.18em] text-white/40">
               TIANXIANG SAT-7 CAM
             </div>
@@ -647,24 +709,56 @@ export default function App() {
               {source === 'gps' && gpsFix ? 'GPS 已定位' : 'GPS 定位'}
             </span>
           </button>
-          <button
-            onClick={() => fileRef.current?.click()}
-            title="相册导入加水印"
-            className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/15 bg-black/40 text-white/70 backdrop-blur-sm transition hover:text-white"
-          >
-            <ImagePlus size={16} />
-          </button>
-          <button
-            onClick={() => patch({ grid: !settings.grid })}
-            title="九宫格"
-            className={`flex h-9 w-9 items-center justify-center rounded-xl border backdrop-blur-sm transition ${
-              settings.grid
-                ? 'border-[#FFD028]/50 bg-[#FFD028]/15 text-[#FFD028]'
-                : 'border-white/15 bg-black/40 text-white/70 hover:text-white'
-            }`}
-          >
-            <LayoutGrid size={16} />
-          </button>
+          <div className="relative">
+            <button
+              onClick={() => setToolsOpen((v) => !v)}
+              title="工具"
+              className={`flex h-9 w-9 items-center justify-center rounded-xl border backdrop-blur-sm transition ${
+                toolsOpen
+                  ? 'border-[#FFD028]/50 bg-[#FFD028]/15 text-[#FFD028]'
+                  : 'border-white/15 bg-black/40 text-white/70 hover:text-white'
+              }`}
+            >
+              <Wrench size={16} />
+            </button>
+            {toolsOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setToolsOpen(false)} />
+                <div className="absolute right-0 z-50 mt-2 w-44 overflow-hidden rounded-xl border border-white/15 bg-[#101418]/95 py-1 shadow-2xl backdrop-blur-md">
+                  <ToolItem
+                    icon={<ImagePlus size={15} />}
+                    label="相册导入加水印"
+                    onClick={() => {
+                      setToolsOpen(false);
+                      fileRef.current?.click();
+                    }}
+                  />
+                  <ToolItem
+                    icon={<LayoutGrid size={15} />}
+                    label="九宫格构图线"
+                    checked={settings.grid}
+                    onClick={() => patch({ grid: !settings.grid })}
+                  />
+                  <ToolItem
+                    icon={<BookOpen size={15} />}
+                    label="施工日志拼图"
+                    onClick={() => {
+                      setToolsOpen(false);
+                      setDiaryOpen(true);
+                    }}
+                  />
+                  <ToolItem
+                    icon={<MapIcon size={15} />}
+                    label="施工影像分布图"
+                    onClick={() => {
+                      setToolsOpen(false);
+                      setDistMapOpen(true);
+                    }}
+                  />
+                </div>
+              </>
+            )}
+          </div>
           <button
             onClick={() => {
               setEditOpen(true);
@@ -674,20 +768,6 @@ export default function App() {
             className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/15 bg-black/40 text-white/70 backdrop-blur-sm transition hover:text-white"
           >
             <SlidersHorizontal size={16} />
-          </button>
-          <button
-            onClick={() => setDiaryOpen(true)}
-            title="施工日志拼图"
-            className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/15 bg-black/40 text-white/70 backdrop-blur-sm transition hover:text-white"
-          >
-            <BookOpen size={16} />
-          </button>
-          <button
-            onClick={() => setDistMapOpen(true)}
-            title="施工影像分布图"
-            className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/15 bg-black/40 text-white/70 backdrop-blur-sm transition hover:text-white"
-          >
-            <MapIcon size={16} />
           </button>
         </div>
       </div>
@@ -754,9 +834,15 @@ export default function App() {
             whileTap={{ scale: 0.88 }}
             onClick={onShutter}
             aria-label="拍摄"
-            className="relative flex h-[76px] w-[76px] items-center justify-center rounded-full border-[3px] border-white/90 bg-white/10 shadow-xl backdrop-blur-sm"
+            className={`relative flex h-[76px] w-[76px] items-center justify-center rounded-full border-[3px] shadow-xl backdrop-blur-sm transition ${
+              shotBusy ? 'border-[#FFD028]/50 bg-black/40' : 'border-white/90 bg-white/10'
+            }`}
           >
-            <span className="h-[58px] w-[58px] rounded-full bg-gradient-to-b from-[#FFD028] to-[#FF9500] shadow-inner transition hover:brightness-110" />
+            {shotBusy ? (
+              <Loader2 size={30} className="animate-spin text-[#FFD028]" />
+            ) : (
+              <span className="h-[58px] w-[58px] rounded-full bg-gradient-to-b from-[#FFD028] to-[#FF9500] shadow-inner transition hover:brightness-110" />
+            )}
           </motion.button>
 
           {/* 切换摄像头 */}

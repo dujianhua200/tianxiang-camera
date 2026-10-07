@@ -25,7 +25,7 @@ export default function DistMapPanel({ open, onClose, shots, project, photograph
     const track: TrackPoint[] = getTrack(date);
     const photos: DistPhoto[] = [];
     for (const s of shots) {
-      if (!s.timeLabel.startsWith(date.replace(/\./g, '-'))) continue;
+      if (s.day !== date) continue;
       const lat = parseCoordLabel(s.latStr);
       const lng = parseCoordLabel(s.lngStr);
       if (lat == null || lng == null) continue;

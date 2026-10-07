@@ -78,3 +78,24 @@ export function parseCoordLabel(s: string): number | null {
   if (h === 'S' || h === 'W') v = -v;
   return v;
 }
+
+/* ---------- 每日拍摄计数（顶栏"今日 N 张"） ---------- */
+const SHOT_KEY = (day: string) => `tx.shots.${day}`;
+
+export function getShotCount(day: string = dayStr()): number {
+  try {
+    return parseInt(localStorage.getItem(SHOT_KEY(day)) || '0', 10) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+export function incShotCount(day: string = dayStr()): number {
+  const n = getShotCount(day) + 1;
+  try {
+    localStorage.setItem(SHOT_KEY(day), String(n));
+  } catch {
+    /* ignore */
+  }
+  return n;
+}

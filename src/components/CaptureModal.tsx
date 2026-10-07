@@ -5,6 +5,8 @@ export interface Shot {
   id: number;
   url: string;
   timeLabel: string;
+  /** 机器可读日期 2026.10.07（供分布图/日志按天过滤，timeLabel 是中文展示格式） */
+  day: string;
   address: string;
   latStr: string;
   lngStr: string;
