@@ -1,12 +1,14 @@
 import { motion } from 'framer-motion';
 import { MapPin, Navigation, Mountain, Briefcase, FileText, Thermometer } from 'lucide-react';
 import type { WatermarkData, WMFields, WMStyle } from '../lib/capture';
+import { getTemplate, getActiveTemplateId, tplRowValue, tplFieldOn } from '../lib/templates';
 
 interface Props {
   data: WatermarkData;
   fields: WMFields;
   position: 'bottom' | 'top';
   style: WMStyle;
+  alpha?: number;
   onClick: () => void;
   onPickNote: () => void;
 }
@@ -357,9 +359,9 @@ function SiteStyle({
   );
 }
 
-export default function WatermarkCard({ data, fields, position, style, onClick, onPickNote }: Props) {
+export default function WatermarkCard({ data, fields, position, style, alpha, onClick, onPickNote }: Props) {
   return (
-    <div className="pointer-events-none absolute inset-0 z-20">
+    <div className="pointer-events-none absolute inset-0 z-20" style={alpha != null && alpha < 1 ? { opacity: alpha } : undefined}>
       {style === 'hero' ? (
         <HeroStyle data={data} fields={fields} onClick={onClick} onPickNote={onPickNote} />
       ) : style === 'strip' ? (
@@ -372,9 +374,75 @@ export default function WatermarkCard({ data, fields, position, style, onClick, 
         <TodayStyle data={data} fields={fields} position={position} onClick={onClick} onPickNote={onPickNote} />
       ) : style === 'todayWork' ? (
         <TodayWorkStyle data={data} fields={fields} position={position} onClick={onClick} onPickNote={onPickNote} />
+      ) : style === 'tpl' ? (
+        <TemplateCardPreview data={data} fields={fields} position={position} onClick={onClick} onPickNote={onPickNote} />
       ) : (
         <CardStyle data={data} fields={fields} position={position} onClick={onClick} onPickNote={onPickNote} />
       )}
+    </div>
+  );
+}
+
+/* ---------- 样式 8：自定义模板预览（CSS 镜像 drawTemplateCard） ---------- */
+function TemplateCardPreview({
+  data,
+  fields,
+  position,
+  onClick,
+  onPickNote,
+}: {
+  data: WatermarkData;
+  fields: WMFields;
+  position: 'bottom' | 'top';
+  onClick: () => void;
+  onPickNote: () => void;
+}) {
+  const tpl = getTemplate(getActiveTemplateId());
+  const hd = tpl.header;
+  const showHead = !!hd && tplFieldOn(hd.field, fields);
+  const headRaw = hd ? (hd.field === 'note' ? data.note : data.project) : '';
+  const headIsPh = !headRaw;
+  const headVal = headRaw || hd?.placeholder || '';
+  const rows = tpl.rows
+    .filter((r) => tplFieldOn(r.field, fields))
+    .map((r) => ({ label: r.label, value: tplRowValue(r.field, data) }))
+    .filter((r) => r.value) as { label: string; value: string }[];
+  return (
+    <div
+      className={`pointer-events-auto absolute left-4 z-20 w-[62%] max-w-[340px] cursor-pointer select-none ${cardPos(position)}`}
+      onClick={onClick}
+    >
+      <div className="overflow-hidden shadow-lg" style={{ background: tpl.card.bg, borderRadius: 10 }}>
+        {showHead && hd && (
+          <div className="px-2.5 py-1.5 text-[11.5px] font-bold leading-tight" style={{ background: hd.bg }}>
+            {hd.label && <span style={{ color: hd.labelColor }}>{hd.label}</span>}
+            <span
+              onClick={(e) => {
+                e.stopPropagation();
+                onPickNote();
+              }}
+              className="cursor-pointer font-semibold underline underline-offset-2"
+              style={{ color: headIsPh ? hd.placeholderColor : hd.valueColor }}
+            >
+              {headVal}
+            </span>
+          </div>
+        )}
+        {rows.map((r, i) => (
+          <div
+            key={i}
+            className="flex items-baseline px-2.5 py-[5px] text-[10.5px] leading-snug"
+            style={i > 0 && tpl.divider !== 'none' ? { borderTop: `1px solid ${tpl.divider}` } : undefined}
+          >
+            <span className="shrink-0 font-semibold" style={{ color: tpl.fonts.label.color }}>
+              {r.label}
+            </span>
+            <span className="min-w-0 flex-1 break-words" style={{ color: tpl.fonts.value.color }}>
+              {r.value}
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

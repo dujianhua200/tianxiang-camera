@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   X,
@@ -10,12 +10,27 @@ import {
   RotateCcw,
   MapPinned,
   Cloud,
+  Download,
+  Upload,
+  Copy,
+  Trash2,
+  Check,
 } from 'lucide-react';
 import { CoordFormat, CoordSystem, FORMAT_LABELS } from '../lib/coords';
 import { toLocalInput, simplifyAddress, type AddrMode } from '../lib/geo';
 import { NOTE_PRESETS } from '../lib/presets';
 import { cloudPing, cloudPingAsync, getCloudCfg } from '../lib/cloud';
 import type { WMFields, WMStyle } from '../lib/capture';
+import {
+  allTemplates,
+  getActiveTemplateId,
+  setActiveTemplateId,
+  loadCustomTemplates,
+  saveCustomTemplates,
+  templateToJson,
+  templateToShareCode,
+  importTemplateText,
+} from '../lib/templates';
 
 export interface Settings {
   timeMode: 'live' | 'custom';
@@ -38,6 +53,13 @@ export interface Settings {
   wmStyle: WMStyle;
   wmPos: 'bottom' | 'top';
   grid: boolean;
+  /** 水印大小（0.6–1.5）/ 透明度（0.4–1） */
+  wmScale: number;
+  wmAlpha: number;
+  /** 轨迹记录开关（供影像分布图使用） */
+  trackOn: boolean;
+  /** 拍摄人（日志/分布图表头） */
+  photographer: string;
 }
 
 interface Props {
@@ -83,6 +105,185 @@ function Seg<T extends string>({
           {o.label}
         </button>
       ))}
+    </div>
+  );
+}
+
+function Slider({
+  label,
+  value,
+  min,
+  max,
+  step,
+  format,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  format: (v: number) => string;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <div className="mb-2 flex items-center gap-3">
+      <span className="w-10 shrink-0 text-[12px] text-white/60">{label}</span>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(parseFloat(e.target.value))}
+        className="h-1 flex-1 accent-[#FFD028]"
+      />
+      <span className="w-11 shrink-0 text-right text-[12px] tabular-nums text-white/80">{format(value)}</span>
+    </div>
+  );
+}
+
+/* ---------- 水印模板管理：应用 / 导出 / 分享码 / 导入 / 删除 ---------- */
+function TemplateManager() {
+  const [list, setList] = useState(allTemplates);
+  const [active, setActive] = useState(getActiveTemplateId());
+  const [showImport, setShowImport] = useState(false);
+  const [importText, setImportText] = useState('');
+  const [importErr, setImportErr] = useState<string[]>([]);
+  const [copied, setCopied] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const refresh = () => {
+    setList(allTemplates());
+    setActive(getActiveTemplateId());
+  };
+  const apply = (id: string) => {
+    setActiveTemplateId(id);
+    refresh();
+  };
+  const doExport = (id: string) => {
+    const t = list.find((x) => x.id === id);
+    if (!t) return;
+    const blob = new Blob([templateToJson(t)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `水印模板_${t.name}.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  };
+  const doCopyCode = async (id: string) => {
+    const t = list.find((x) => x.id === id);
+    if (!t) return;
+    try {
+      await navigator.clipboard.writeText(templateToShareCode(t));
+      setCopied(id);
+      setTimeout(() => setCopied(null), 1500);
+    } catch {
+      /* 剪贴板不可用 */
+    }
+  };
+  const doDelete = (id: string) => {
+    const customs = loadCustomTemplates().filter((x) => x.id !== id);
+    saveCustomTemplates(customs);
+    if (getActiveTemplateId() === id) setActiveTemplateId('built-in:today-yellow');
+    refresh();
+  };
+  const doImport = () => {
+    const { tpl, errors } = importTemplateText(importText);
+    setImportErr(errors);
+    if (!tpl) return;
+    const customs = loadCustomTemplates();
+    customs.push(tpl);
+    saveCustomTemplates(customs);
+    setImportText('');
+    setShowImport(false);
+    apply(tpl.id);
+  };
+  const onFile = (f: File | undefined) => {
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = () => {
+      setImportText(String(r.result || ''));
+      setShowImport(true);
+    };
+    r.readAsText(f);
+  };
+
+  return (
+    <div className="space-y-2">
+      {list.map((t) => (
+        <div
+          key={t.id}
+          className={`flex items-center gap-2 rounded-lg border px-2.5 py-2 ${
+            active === t.id ? 'border-[#FFD028]/60 bg-[#FFD028]/10' : 'border-white/10 bg-white/[0.03]'
+          }`}
+        >
+          <button onClick={() => apply(t.id)} className="min-w-0 flex-1 text-left">
+            <div className={`truncate text-[13px] ${active === t.id ? 'font-semibold text-[#FFD028]' : 'text-white/80'}`}>
+              {t.name}
+            </div>
+            <div className="text-[10.5px] text-white/35">
+              {t.builtin ? '内置' : '自定义'} · {t.rows.length} 行
+            </div>
+          </button>
+          {active === t.id && <Check size={14} className="shrink-0 text-[#FFD028]" />}
+          <button onClick={() => doExport(t.id)} title="导出 JSON 文件（发给队友）" className="text-white/50 hover:text-white">
+            <Download size={14} />
+          </button>
+          <button onClick={() => doCopyCode(t.id)} title="复制分享码（粘贴即导入）" className="text-white/50 hover:text-white">
+            {copied === t.id ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+          </button>
+          {!t.builtin && (
+            <button onClick={() => doDelete(t.id)} title="删除" className="text-white/50 hover:text-red-400">
+              <Trash2 size={14} />
+            </button>
+          )}
+        </div>
+      ))}
+      <div className="flex gap-2">
+        <button
+          onClick={() => setShowImport(!showImport)}
+          className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-white/15 py-2 text-[12px] text-white/70 hover:text-white"
+        >
+          <Upload size={13} /> 导入模板
+        </button>
+        <button
+          onClick={() => fileRef.current?.click()}
+          className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-white/15 py-2 text-[12px] text-white/70 hover:text-white"
+        >
+          <Upload size={13} /> 从文件导入
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".json,application/json"
+          className="hidden"
+          onChange={(e) => onFile(e.target.files?.[0])}
+        />
+      </div>
+      {showImport && (
+        <div>
+          <textarea
+            value={importText}
+            onChange={(e) => setImportText(e.target.value)}
+            placeholder="粘贴模板 JSON 或分享码…"
+            rows={4}
+            className="w-full rounded-lg border border-white/15 bg-white/[0.05] px-2.5 py-2 font-mono text-[11px] text-white outline-none focus:border-[#FFD028]/60"
+          />
+          {importErr.length > 0 && (
+            <div className="mt-1 text-[11px] leading-relaxed text-red-400">{importErr.join('；')}</div>
+          )}
+          <button
+            onClick={doImport}
+            className="mt-1.5 w-full rounded-lg bg-[#FFD028] py-2 text-[13px] font-bold text-black"
+          >
+            确认导入
+          </button>
+        </div>
+      )}
+      <div className="text-[10.5px] leading-relaxed text-white/35">
+        队里统一模板：导出 JSON 发群里，队友导入即用，全队水印格式一致。
+      </div>
     </div>
   );
 }
@@ -287,6 +488,13 @@ export default function EditPanel(p: Props) {
             placeholder="备注 / 施工内容（七星台账模板头部）"
             className={inputCls}
           />
+          <input
+            value={s.photographer}
+            onChange={(e) => patch({ photographer: e.target.value })}
+            placeholder="拍摄人（施工日志 / 分布图表头）"
+            className={inputCls}
+          />
+          <Toggle label="记录轨迹（供施工影像分布图使用）" checked={s.trackOn} onChange={(v) => patch({ trackOn: v })} />
           <div className="flex flex-wrap gap-1.5">
             {NOTE_PRESETS.map((c) => (
               <button
@@ -395,6 +603,7 @@ export default function EditPanel(p: Props) {
                 ['site', '七星台账'],
                 ['today', '今日工程'],
                 ['todayWork', '今日工作'],
+                ['tpl', '自定义模板'],
               ] as [WMStyle, string][]
             ).map(([v, label]) => (
               <button
@@ -428,6 +637,35 @@ export default function EditPanel(p: Props) {
             </div>
           )}
         </div>
+
+        <div className="mt-3">
+          <div className="mb-1.5 text-[11px] text-white/40">水印大小 / 透明度</div>
+          <Slider
+            label="大小"
+            value={s.wmScale}
+            min={0.6}
+            max={1.5}
+            step={0.05}
+            format={(v) => `${Math.round(v * 100)}%`}
+            onChange={(v) => patch({ wmScale: v })}
+          />
+          <Slider
+            label="透明度"
+            value={s.wmAlpha}
+            min={0.4}
+            max={1}
+            step={0.05}
+            format={(v) => `${Math.round(v * 100)}%`}
+            onChange={(v) => patch({ wmAlpha: v })}
+          />
+        </div>
+
+        {s.wmStyle === 'tpl' && (
+          <div className="mt-3">
+            <div className="mb-1.5 text-[11px] text-white/40">水印模板（JSON，可分享给全队统一）</div>
+            <TemplateManager />
+          </div>
+        )}
 
         <button
           onClick={p.onReset}

@@ -1,4 +1,6 @@
-/* 照片合成：画面帧 + 矢量水印绘制（4 套样式，与 WatermarkCard 视觉对应） */
+/* 照片合成：画面帧 + 矢量水印绘制（8 套样式，与 WatermarkCard 视觉对应） */
+import type { WatermarkTemplate } from './templates';
+import { tplRowValue, tplFieldOn, getTemplate, getActiveTemplateId } from './templates';
 
 export interface WMFields {
   date: boolean;
@@ -11,7 +13,7 @@ export interface WMFields {
   note: boolean;
 }
 
-export type WMStyle = 'card' | 'hero' | 'strip' | 'stamp' | 'site' | 'today' | 'todayWork';
+export type WMStyle = 'card' | 'hero' | 'strip' | 'stamp' | 'site' | 'today' | 'todayWork' | 'tpl';
 
 export interface WatermarkData {
   timeStr: string;
@@ -144,6 +146,9 @@ export interface ComposeInput {
   wmStyle: WMStyle;
   data: WatermarkData;
   fields: WMFields;
+  /** 水印缩放（0.6–1.5，默认 1）与整体透明度（0.4–1，默认 1） */
+  wmScale?: number;
+  wmAlpha?: number;
 }
 
 interface InfoRow {
@@ -178,10 +183,11 @@ function drawCardStyle(
   input: ComposeInput
 ) {
   const { data: d, fields: f } = input;
+  const sc = input.wmScale || 1; // 水印大小滑杆
   const m = Math.round(Math.min(W, H) * 0.032);
   const portrait = H > W;
-  const cardW = portrait ? W - m * 2 : Math.min(W - m * 2, Math.round(Math.min(W * 0.56, H * 0.95)));
-  const S = cardW / 100;
+  const cardW = Math.min(Math.round((portrait ? W - m * 2 : Math.min(W - m * 2, Math.round(Math.min(W * 0.56, H * 0.95)))) * sc), W - m * 2);
+  const S = (cardW / 100);
   const pad = 4 * S;
   const tx = m + pad + 3.4 * S;
   const contentW = m + cardW - pad - tx;
@@ -288,10 +294,11 @@ function drawHeroStyle(
   input: ComposeInput
 ) {
   const { data: d, fields: f } = input;
+  const sc = input.wmScale || 1; // 水印大小滑杆
   const m = Math.round(Math.min(W, H) * 0.032);
   const portrait = H > W;
-  const cardW = portrait ? W - m * 2 : Math.min(W - m * 2, Math.round(Math.min(W * 0.56, H * 0.95)));
-  const S = cardW / 100;
+  const cardW = Math.min(Math.round((portrait ? W - m * 2 : Math.min(W - m * 2, Math.round(Math.min(W * 0.56, H * 0.95)))) * sc), W - m * 2);
+  const S = (cardW / 100);
 
   ctx.save();
   ctx.textBaseline = 'alphabetic';
@@ -350,8 +357,9 @@ function drawStripStyle(
   input: ComposeInput
 ) {
   const { data: d, fields: f } = input;
+  const sc = input.wmScale || 1; // 水印大小滑杆
   const portrait = H > W;
-  const S = (portrait ? W : Math.min(W * 0.56, H * 0.95)) / 100;
+  const S = ((portrait ? W : Math.min(W * 0.56, H * 0.95)) / 100) * sc; // 通栏只缩放字号
   const m = 4.5 * S;
   const pad = 4.2 * S;
 
@@ -444,10 +452,11 @@ function drawStampStyle(
   input: ComposeInput
 ) {
   const { data: d, fields: f } = input;
+  const sc = input.wmScale || 1; // 水印大小滑杆
   const m = Math.round(Math.min(W, H) * 0.032);
   const portrait = H > W;
-  const cw = Math.min(W - m * 2, portrait ? W * 0.86 : W * 0.5);
-  const S = cw / 100;
+  const cw = Math.min(Math.min(W - m * 2, portrait ? W * 0.86 : W * 0.5) * sc, W - m * 2);
+  const S = (cw / 100);
   const pad = 5 * S;
   const tx = m + pad;
   const contentW = m + cw - pad - tx;
@@ -529,10 +538,11 @@ function drawSiteStyle(
   input: ComposeInput
 ) {
   const { data: d, fields: f } = input;
+  const sc = input.wmScale || 1; // 水印大小滑杆
   const portrait = H > W;
   const m = Math.round(W * 0.031);
-  const cardW = Math.round(W * (portrait ? 0.6 : 0.42)); // 左下小卡，非通栏
-  const S = cardW / 100;
+  const cardW = Math.min(Math.round(W * (portrait ? 0.6 : 0.42) * sc), W - m * 2); // 左下小卡，非通栏
+  const S = (cardW / 100);
   const pad = 4.5 * S;
   const headH = 11.6 * S;
   const fLab = `600 ${5.4 * S}px ${SANS}`;
@@ -636,10 +646,11 @@ function drawTodayStyle(
   input: ComposeInput
 ) {
   const { data: d, fields: f } = input;
+  const sc = input.wmScale || 1; // 水印大小滑杆
   const portrait = H > W;
   const m = Math.round(W * 0.031);
-  const cardW = Math.round(W * (portrait ? 0.62 : 0.44));
-  const S = cardW / 100;
+  const cardW = Math.min(Math.round(W * (portrait ? 0.62 : 0.44) * sc), W - m * 2);
+  const S = (cardW / 100);
   const pad = 4.5 * S;
   const headH = 10.8 * S;
   const fLab = `600 ${5.4 * S}px ${SANS}`;
@@ -736,10 +747,11 @@ function drawTodayWorkStyle(
   input: ComposeInput
 ) {
   const { data: d, fields: f } = input;
+  const sc = input.wmScale || 1; // 水印大小滑杆
   const m = Math.round(Math.min(W, H) * 0.032);
   const portrait = H > W;
-  const cardW = portrait ? W - m * 2 : Math.min(W - m * 2, Math.round(W * 0.62));
-  const S = cardW / 100;
+  const cardW = Math.min((portrait ? W - m * 2 : Math.min(W - m * 2, Math.round(W * 0.62))) * sc, W - m * 2);
+  const S = (cardW / 100);
   const pad = 4.5 * S;
 
   ctx.save();
@@ -825,27 +837,150 @@ function drawTodayWorkStyle(
   ctx.restore();
 }
 
+/* ================= 样式 8：自定义模板（JSON 模板驱动的卡片） ================= */
+function drawTemplateCard(
+  ctx: CanvasRenderingContext2D,
+  W: number,
+  H: number,
+  input: ComposeInput
+) {
+  const { data: d, fields: f } = input;
+  const sc = input.wmScale || 1;
+  const tpl: WatermarkTemplate = getTemplate(getActiveTemplateId());
+  const portrait = H > W;
+  const m = Math.round(W * 0.031);
+  const rawW = W * ((portrait ? tpl.card.widthPct : tpl.card.widthPct * 0.72) / 100) * sc;
+  const cardW = Math.max(120, Math.min(Math.round(rawW), W - m * 2));
+  const S = cardW / 100;
+  const pad = tpl.card.padding * S;
+  const fLab = `${tpl.fonts.label.weight} ${tpl.fonts.label.size * S}px ${SANS}`;
+  const fVal = `${tpl.fonts.value.weight} ${tpl.fonts.value.size * S}px ${SANS}`;
+
+  /* 头部 */
+  let headH = 0;
+  let headValue = '';
+  let headIsPlaceholder = false;
+  const hd = tpl.header;
+  if (hd && tplFieldOn(hd.field, f)) {
+    headH = (tpl.fonts.headerSize + 5.2) * S;
+    const v = hd.field === 'note' ? d.note : d.project;
+    headIsPlaceholder = !v;
+    headValue = v || hd.placeholder;
+  }
+
+  const rows = tpl.rows
+    .filter((r) => tplFieldOn(r.field, f))
+    .map((r) => ({ label: r.label, value: tplRowValue(r.field, d) }))
+    .filter((r) => r.value) as { label: string; value: string }[];
+
+  const lineH = (tpl.fonts.value.size + 1.5) * S;
+  const rowPad = 5.3 * S;
+  const layout = rows.map((r) => {
+    ctx.font = fLab;
+    const lw = ctx.measureText(r.label).width;
+    ctx.font = fVal;
+    const lines = wrapText(ctx, r.value, cardW - lw - pad * 2, 4);
+    return { label: r.label, lw, lines, h: lines.length * lineH + rowPad };
+  });
+  const totalH = headH + layout.reduce((a, r) => a + r.h, 0) + 2 * S;
+  const x = m;
+  const y = input.wmPos === 'bottom' ? H - m - totalH : m;
+
+  ctx.save();
+  ctx.textBaseline = 'alphabetic';
+
+  rr(ctx, x, y, cardW, totalH, tpl.card.radius * S);
+  ctx.fillStyle = tpl.card.bg;
+  ctx.fill();
+
+  if (hd && headH > 0) {
+    ctx.save();
+    rr(ctx, x, y, cardW, totalH, tpl.card.radius * S);
+    ctx.clip();
+    ctx.fillStyle = hd.bg;
+    ctx.fillRect(x, y, cardW, headH);
+    ctx.restore();
+    ctx.font = `700 ${tpl.fonts.headerSize * S}px ${SANS}`;
+    ctx.fillStyle = hd.labelColor;
+    ctx.fillText(hd.label, x + pad, y + headH / 2 + (tpl.fonts.headerSize * S) / 2.8);
+    const labW = ctx.measureText(hd.label).width;
+    ctx.font = `600 ${tpl.fonts.value.size * S}px ${SANS}`;
+    const valTxt = ellipsize(ctx, headValue, cardW - labW - pad * 2 - 3 * S);
+    ctx.fillStyle = headIsPlaceholder ? hd.placeholderColor : hd.valueColor;
+    ctx.fillText(valTxt, x + pad + labW, y + headH / 2 + (tpl.fonts.value.size * S) / 2.8);
+    if (hd.label) {
+      const valW = ctx.measureText(valTxt).width;
+      ctx.save();
+      ctx.globalAlpha *= 0.65;
+      ctx.beginPath();
+      ctx.moveTo(x + pad + labW, y + headH / 2 + (tpl.fonts.headerSize * S) / 2.8 + 1.6 * S);
+      ctx.lineTo(x + pad + labW + valW, y + headH / 2 + (tpl.fonts.headerSize * S) / 2.8 + 1.6 * S);
+      ctx.strokeStyle = headIsPlaceholder ? hd.placeholderColor : hd.valueColor;
+      ctx.lineWidth = Math.max(1, W * 0.0005);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  let cy = y + headH;
+  layout.forEach((r, i) => {
+    if (i > 0 && tpl.divider !== 'none') {
+      ctx.beginPath();
+      ctx.moveTo(x + pad, cy);
+      ctx.lineTo(x + cardW - pad, cy);
+      ctx.strokeStyle = tpl.divider;
+      ctx.lineWidth = Math.max(1, W * 0.0004);
+      ctx.stroke();
+    }
+    const base0 = cy + rowPad / 2 + tpl.fonts.label.size * S * 0.95;
+    ctx.font = fLab;
+    ctx.fillStyle = tpl.fonts.label.color;
+    ctx.fillText(r.label, x + pad, base0);
+    ctx.font = fVal;
+    ctx.fillStyle = tpl.fonts.value.color;
+    r.lines.forEach((ln, j) => {
+      ctx.fillText(ln, x + pad + r.lw, base0 + j * lineH);
+    });
+    cy += r.h;
+  });
+
+  ctx.restore();
+}
+
 export function drawWatermark(
   ctx: CanvasRenderingContext2D,
   W: number,
   H: number,
   input: ComposeInput
 ) {
-  switch (input.wmStyle) {
-    case 'hero':
-      return drawHeroStyle(ctx, W, H, input);
-    case 'strip':
-      return drawStripStyle(ctx, W, H, input);
-    case 'stamp':
-      return drawStampStyle(ctx, W, H, input);
-    case 'site':
-      return drawSiteStyle(ctx, W, H, input);
-    case 'today':
-      return drawTodayStyle(ctx, W, H, input);
-    case 'todayWork':
-      return drawTodayWorkStyle(ctx, W, H, input);
-    default:
-      return drawCardStyle(ctx, W, H, input);
+  const alpha = input.wmAlpha ?? 1;
+  const run = () => {
+    switch (input.wmStyle) {
+      case 'hero':
+        return drawHeroStyle(ctx, W, H, input);
+      case 'strip':
+        return drawStripStyle(ctx, W, H, input);
+      case 'stamp':
+        return drawStampStyle(ctx, W, H, input);
+      case 'site':
+        return drawSiteStyle(ctx, W, H, input);
+      case 'today':
+        return drawTodayStyle(ctx, W, H, input);
+      case 'todayWork':
+        return drawTodayWorkStyle(ctx, W, H, input);
+      case 'tpl':
+        return drawTemplateCard(ctx, W, H, input);
+      default:
+        return drawCardStyle(ctx, W, H, input);
+    }
+  };
+  if (alpha >= 1) return run();
+  ctx.save();
+  ctx.globalAlpha = Math.max(0.05, Math.min(1, alpha));
+  try {
+    return run();
+  } finally {
+    ctx.restore();
   }
 }
 

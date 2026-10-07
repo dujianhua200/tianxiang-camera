@@ -11,11 +11,16 @@ import {
   VideoOff,
   Satellite,
   ImagePlus,
+  BookOpen,
+  Map as MapIcon,
 } from 'lucide-react';
 import WatermarkCard from './components/WatermarkCard';
 import MapPanel from './components/MapPanel';
 import EditPanel, { Settings } from './components/EditPanel';
 import CaptureModal, { Shot } from './components/CaptureModal';
+import DiaryPanel from './components/DiaryPanel';
+import DistMapPanel from './components/DistMapPanel';
+import { logTrackPoint } from './lib/track';
 import { composePhoto, WatermarkData } from './lib/capture';
 import { parseExifTime, parseExifGps } from './lib/exif';
 import { NOTE_PRESETS } from './lib/presets';
@@ -61,7 +66,7 @@ declare global {
 
 const STYLE_LABELS: Record<string, string> = {
   card: '工程卡片', hero: '今日大抬头', strip: '信息底栏', stamp: '打卡印章', site: '七星台账',
-  today: '今日工程', todayWork: '今日工作',
+  today: '今日工程', todayWork: '今日工作', tpl: '自定义模板',
 };
 
 const CLOUD0 = getCloudCfg();
@@ -87,6 +92,10 @@ const DEFAULT_SETTINGS: Settings = {
   wmStyle: 'card',
   wmPos: 'bottom',
   grid: true,
+  wmScale: 1,
+  wmAlpha: 1,
+  trackOn: true,
+  photographer: '',
 };
 
 type CamStatus = 'loading' | 'live' | 'fallback';
@@ -130,6 +139,12 @@ export default function App() {
   const [flash, setFlash] = useState(false);
   const [shots, setShots] = useState<Shot[]>([]);
   const [activeShot, setActiveShot] = useState<Shot | null>(null);
+  const [diaryOpen, setDiaryOpen] = useState(false);
+  const [distMapOpen, setDistMapOpen] = useState(false);
+  const trackOnRef = useRef(true);
+  useEffect(() => {
+    trackOnRef.current = settings.trackOn;
+  }, [settings.trackOn]);
   const [toast, setToast] = useState<{ id: number; msg: string } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -220,6 +235,7 @@ export default function App() {
         };
         setLastGps({ lat: g.lat, lng: g.lng, datum: 'wgs84', altitude: g.alt, accuracy: g.acc });
         setGpsFix(true);
+        if (trackOnRef.current) logTrackPoint(g.lat, g.lng);
         if (followRef.current) {
           setSource('gps');
           setPos({ lat: g.lat, lng: g.lng, datum: 'wgs84', altitude: g.alt, accuracy: g.acc });
@@ -451,6 +467,8 @@ export default function App() {
         wmStyle: settings.wmStyle,
         data,
         fields: settings.fields,
+        wmScale: settings.wmScale,
+        wmAlpha: settings.wmAlpha,
       });
       finalizeShot(url, data, effDate);
     } catch {
@@ -489,6 +507,8 @@ export default function App() {
         wmStyle: settings.wmStyle,
         data,
         fields: settings.fields,
+        wmScale: settings.wmScale,
+        wmAlpha: settings.wmAlpha,
       });
       finalizeShot(url, data, dt);
       if (photoPos) showToast('已采用照片原始 GPS 位置');
@@ -655,6 +675,20 @@ export default function App() {
           >
             <SlidersHorizontal size={16} />
           </button>
+          <button
+            onClick={() => setDiaryOpen(true)}
+            title="施工日志拼图"
+            className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/15 bg-black/40 text-white/70 backdrop-blur-sm transition hover:text-white"
+          >
+            <BookOpen size={16} />
+          </button>
+          <button
+            onClick={() => setDistMapOpen(true)}
+            title="施工影像分布图"
+            className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/15 bg-black/40 text-white/70 backdrop-blur-sm transition hover:text-white"
+          >
+            <MapIcon size={16} />
+          </button>
         </div>
       </div>
 
@@ -664,6 +698,7 @@ export default function App() {
         fields={settings.fields}
         position={settings.wmPos}
         style={settings.wmStyle}
+        alpha={settings.wmAlpha}
         onClick={() => {
           setEditOpen(true);
           setMapOpen(false);
@@ -924,6 +959,21 @@ export default function App() {
       {/* ================= 照片预览 ================= */}
       <AnimatePresence>
         {activeShot && <CaptureModal shot={activeShot} onClose={() => setActiveShot(null)} />}
+        <DiaryPanel
+          open={diaryOpen}
+          onClose={() => setDiaryOpen(false)}
+          shots={shots}
+          project={settings.project}
+          weather={settings.weather}
+          photographer={settings.photographer}
+        />
+        <DistMapPanel
+          open={distMapOpen}
+          onClose={() => setDistMapOpen(false)}
+          shots={shots}
+          project={settings.project}
+          photographer={settings.photographer}
+        />
       </AnimatePresence>
 
       {/* ================= Toast ================= */}
