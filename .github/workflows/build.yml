@@ -128,19 +128,28 @@ jobs:
         with:
           path: artifacts
           merge-multiple: true
+      - name: Rename assets to ASCII
+        # softprops/action-gh-release 上传 multipart 时会洗掉非 ASCII 文件名
+        # （天象七星-1.01.apk → -1.01.apk），此处统一转 ASCII，中文名写进 Release 说明
+        run: |
+          cd artifacts
+          mv 天象七星-*.apk "tianxiang-${{ github.ref_name }}.apk"
+          mv 天象七星批量水印.exe "tianxiang-batch-watermark-${{ github.ref_name }}.exe"
+          mv index.html "tianxiang-camera-web-${{ github.ref_name }}.html"
+          ls -la
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            artifacts/天象七星-*.apk
-            artifacts/*.exe
-            artifacts/web-dist/index.html
+            artifacts/tianxiang-*.apk
+            artifacts/tianxiang-*.exe
+            artifacts/tianxiang-*.html
           body: |
             ## 滑洲天象七星 ${{ github.ref_name }}
 
-            - 📱 Android：`天象七星-*.apk`（现场拍摄水印相机）
-            - 🖥️ Windows：`天象七星批量水印.exe`（桌面批量水印工具，免安装）
-            - 🌐 `index.html`：单文件网页版（可直接浏览器打开）
+            - 📱 Android：`tianxiang-*.apk`（现场拍摄水印相机「天象七星」）
+            - 🖥️ Windows：`tianxiang-batch-watermark-*.exe`（桌面批量水印工具「天象七星批量水印」，免安装）
+            - 🌐 `tianxiang-camera-web-*.html`：单文件网页版（可直接浏览器打开）
 
             首次使用请先在 App「水印编辑 → 地点」填入自己的高德 Web Key；
             云台账部署前务必修改默认口令（见 README 安全必读）。
