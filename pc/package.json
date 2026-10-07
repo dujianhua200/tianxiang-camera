@@ -1,6 +1,6 @@
 {
   "name": "txqs-batch-watermark",
-  "version": "1.0.1",
+  "version": "1.0.3",
   "description": "天象七星 批量水印台账工具",
   "main": "main.js",
   "author": "tiantexiang",

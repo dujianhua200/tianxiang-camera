@@ -675,7 +675,7 @@ export default function EditPanel(p: Props) {
           恢复默认设置
         </button>
         <div className="mt-3 text-center font-mono text-[10px] tracking-widest text-white/25">
-          天象七星 v1.01
+          天象七星 v1.03
         </div>
       </div>
     </motion.div>
