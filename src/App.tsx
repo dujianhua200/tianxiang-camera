@@ -16,7 +16,7 @@ import WatermarkCard from './components/WatermarkCard';
 import MapPanel from './components/MapPanel';
 import EditPanel, { Settings } from './components/EditPanel';
 import CaptureModal, { Shot } from './components/CaptureModal';
-import { composePhoto, antiCode, WatermarkData } from './lib/capture';
+import { composePhoto, WatermarkData } from './lib/capture';
 import { parseExifTime, parseExifGps } from './lib/exif';
 import { NOTE_PRESETS } from './lib/presets';
 import { GeoPoint, Datum, toDatum, formatLatLng } from './lib/coords';
@@ -61,6 +61,7 @@ declare global {
 
 const STYLE_LABELS: Record<string, string> = {
   card: '工程卡片', hero: '今日大抬头', strip: '信息底栏', stamp: '打卡印章', site: '七星台账',
+  today: '今日工程', todayWork: '今日工作',
 };
 
 const CLOUD0 = getCloudCfg();
@@ -82,7 +83,7 @@ const DEFAULT_SETTINGS: Settings = {
   cloudUrl: CLOUD0.url,
   cloudLan: CLOUD0.lan,
   cloudToken: CLOUD0.token,
-  fields: { date: true, addr: true, coords: true, alt: true, weather: true, project: true, note: true },
+  fields: { date: true, addr: true, lng: true, lat: true, alt: true, weather: true, project: true, note: true },
   wmStyle: 'card',
   wmPos: 'bottom',
   grid: true,
@@ -314,7 +315,6 @@ export default function App() {
       siteTime,
       siteLng,
       siteLat,
-      antiCode: antiCode(siteTime, siteLat, siteLng),
     };
   };
   const wmData = buildData();

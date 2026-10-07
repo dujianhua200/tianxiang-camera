@@ -374,7 +374,8 @@ export default function EditPanel(p: Props) {
         <div className="flex flex-wrap gap-2">
           <Toggle label="日期星期" checked={s.fields.date} onChange={(v) => setField('date', v)} />
           <Toggle label="地点地址" checked={s.fields.addr} onChange={(v) => setField('addr', v)} />
-          <Toggle label="经纬度" checked={s.fields.coords} onChange={(v) => setField('coords', v)} />
+          <Toggle label="经度" checked={s.fields.lng} onChange={(v) => setField('lng', v)} />
+          <Toggle label="纬度" checked={s.fields.lat} onChange={(v) => setField('lat', v)} />
           <Toggle label="海拔精度" checked={s.fields.alt} onChange={(v) => setField('alt', v)} />
           <Toggle label="天气" checked={s.fields.weather} onChange={(v) => setField('weather', v)} />
           <Toggle label="工程名称" checked={s.fields.project} onChange={(v) => setField('project', v)} />
@@ -392,6 +393,8 @@ export default function EditPanel(p: Props) {
                 ['strip', '信息底栏'],
                 ['stamp', '打卡印章'],
                 ['site', '七星台账'],
+                ['today', '今日工程'],
+                ['todayWork', '今日工作'],
               ] as [WMStyle, string][]
             ).map(([v, label]) => (
               <button

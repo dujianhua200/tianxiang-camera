@@ -3,14 +3,15 @@
 export interface WMFields {
   date: boolean;
   addr: boolean;
-  coords: boolean;
+  lng: boolean;
+  lat: boolean;
   alt: boolean;
   weather: boolean;
   project: boolean;
   note: boolean;
 }
 
-export type WMStyle = 'card' | 'hero' | 'strip' | 'stamp' | 'site';
+export type WMStyle = 'card' | 'hero' | 'strip' | 'stamp' | 'site' | 'today' | 'todayWork';
 
 export interface WatermarkData {
   timeStr: string;
@@ -28,19 +29,6 @@ export interface WatermarkData {
   siteTime: string; // 2026.09.10 22:41
   siteLng: string; // 114.051486°E
   siteLat: string; // 32.170357°N
-  antiCode: string; // 防伪码
-}
-
-/** 防伪码：时间+经纬度 FNV 双哈希 → 14 位大写字母数字（防 PS 抵赖） */
-export function antiCode(timeStr: string, latStr: string, lngStr: string): string {
-  const src = `${timeStr}|${latStr}|${lngStr}`;
-  let h1 = 0x811c9dc5;
-  let h2 = 0x01000193;
-  for (let i = 0; i < src.length; i++) {
-    h1 = Math.imul(h1 ^ src.charCodeAt(i), 16777619) >>> 0;
-    h2 = Math.imul((h2 + src.charCodeAt(i) * (i + 7)) >>> 0, 2654435761) >>> 0;
-  }
-  return (h1.toString(36) + h2.toString(36)).toUpperCase().padEnd(14, '0').slice(0, 14);
 }
 
 /* Lucide 风格图标（24 网格） */
@@ -172,7 +160,10 @@ function buildRows(
 ): InfoRow[] {
   const rows: InfoRow[] = [];
   if (addrLines.length) rows.push({ icon: 'pin', lines: addrLines });
-  if (f.coords) rows.push({ icon: 'nav', lines: [d.latStr, d.lngStr], mono: true });
+  const coordLines: string[] = [];
+  if (f.lat) coordLines.push(d.latStr);
+  if (f.lng) coordLines.push(d.lngStr);
+  if (coordLines.length) rows.push({ icon: 'nav', lines: coordLines, mono: true });
   if (f.alt && d.altLine) rows.push({ icon: 'mountain', lines: [d.altLine] });
   if (f.project && d.project) rows.push({ icon: 'case', lines: [d.project] });
   if (f.note && d.note) rows.push({ icon: 'note', lines: [d.note] });
@@ -385,8 +376,10 @@ function drawStripStyle(
   const rRows: { icon: IconName; text: string; mono?: boolean }[] = [];
   if (f.addr && d.address)
     rRows.push({ icon: 'pin', text: ellipsize(ctx, d.address, rightMaxW) });
-  if (f.coords)
-    rRows.push({ icon: 'nav', text: ellipsize(ctx, `${d.latStr}  ${d.lngStr}`, rightMaxW), mono: true });
+  if (f.lat)
+    rRows.push({ icon: 'nav', text: ellipsize(ctx, d.latStr, rightMaxW), mono: true });
+  if (f.lng)
+    rRows.push({ icon: 'nav', text: ellipsize(ctx, d.lngStr, rightMaxW), mono: true });
   if (f.alt && d.altLine) rRows.push({ icon: 'mountain', text: ellipsize(ctx, d.altLine, rightMaxW) });
   if (f.project && d.project)
     rRows.push({ icon: 'case', text: ellipsize(ctx, d.project, rightMaxW) });
@@ -547,11 +540,9 @@ function drawSiteStyle(
 
   /* 行集合：标签 + 值 */
   const rows: { label: string; value: string }[] = [];
-  if (f.addr && d.address) rows.push({ label: '地\u3000\u3000点：', value: d.address });
-  if (f.coords) {
-    rows.push({ label: '经\u3000\u3000度：', value: d.siteLng });
-    rows.push({ label: '纬\u3000\u3000度：', value: d.siteLat });
-  }
+  if (f.addr && d.address) rows.push({ label: '地　　点：', value: d.address });
+  if (f.lng) rows.push({ label: '经　　度：', value: d.siteLng });
+  if (f.lat) rows.push({ label: '纬　　度：', value: d.siteLat });
   if (f.date) rows.push({ label: '拍 摄 时 间：', value: d.siteTime });
   if (f.weather && d.weather) rows.push({ label: '天\u3000\u3000气：', value: d.weather });
   if (f.project && d.project) rows.push({ label: '工\u3000\u3000程：', value: d.project });
@@ -635,6 +626,205 @@ function drawSiteStyle(
   ctx.restore();
 }
 
+/* ================= 样式 6：今日工程（复刻今日相机工程水印） =================
+ * 对照今日相机实拍：左下黄头卡片，施工内容黄条 + 地点/经度/纬度/拍摄时间/天气，
+ * 每项独立开关，无防伪码。 */
+function drawTodayStyle(
+  ctx: CanvasRenderingContext2D,
+  W: number,
+  H: number,
+  input: ComposeInput
+) {
+  const { data: d, fields: f } = input;
+  const portrait = H > W;
+  const m = Math.round(W * 0.031);
+  const cardW = Math.round(W * (portrait ? 0.62 : 0.44));
+  const S = cardW / 100;
+  const pad = 4.5 * S;
+  const headH = 10.8 * S;
+  const fLab = `600 ${5.4 * S}px ${SANS}`;
+  const fVal = `500 ${5.4 * S}px ${SANS}`;
+
+  const rows: { label: string; value: string }[] = [];
+  if (f.addr && d.address) rows.push({ label: '地　　点：', value: d.address });
+  if (f.lng) rows.push({ label: '经　　度：', value: d.siteLng });
+  if (f.lat) rows.push({ label: '纬　　度：', value: d.siteLat });
+  if (f.date) rows.push({ label: '拍 摄 时 间：', value: d.siteTime });
+  if (f.weather && d.weather) rows.push({ label: '天　　气：', value: d.weather });
+
+  const showHead = !!f.note;
+
+  const lineH = 6.9 * S;
+  const rowPad = 5.3 * S;
+  const layout = rows.map((r) => {
+    ctx.font = fLab;
+    const lw = ctx.measureText(r.label).width;
+    ctx.font = fVal;
+    const lines = wrapText(ctx, r.value, cardW - lw - pad * 2, 4);
+    return { label: r.label, lw, lines, h: lines.length * lineH + rowPad };
+  });
+  const totalH = (showHead ? headH : 0) + layout.reduce((a, r) => a + r.h, 0) + 2 * S;
+  const x = m;
+  const y = input.wmPos === 'bottom' ? H - m - totalH : m;
+
+  ctx.save();
+  ctx.textBaseline = 'alphabetic';
+
+  rr(ctx, x, y, cardW, totalH, 2.2 * S);
+  ctx.fillStyle = 'rgba(242,244,246,0.88)';
+  ctx.fill();
+
+  if (showHead) {
+    ctx.save();
+    rr(ctx, x, y, cardW, totalH, 2.2 * S);
+    ctx.clip();
+    ctx.fillStyle = '#F7D400';
+    ctx.fillRect(x, y, cardW, headH);
+    ctx.restore();
+
+    const hasNote = !!d.note;
+    const content = d.note || '请选择选项';
+    ctx.font = `700 ${5.6 * S}px ${SANS}`;
+    ctx.fillStyle = 'rgba(23,24,26,0.95)';
+    const lab = '施 工 内 容：';
+    ctx.fillText(lab, x + pad, y + headH / 2 + 2 * S);
+    const labW = ctx.measureText(lab).width;
+    ctx.font = `600 ${5.4 * S}px ${SANS}`;
+    const valTxt = ellipsize(ctx, content, cardW - labW - pad * 2 - 3 * S);
+    const valW = ctx.measureText(valTxt).width;
+    /* 有内容深灰；无内容时"请选择选项"为橄榄黄——与今日相机一致 */
+    ctx.fillStyle = hasNote ? 'rgba(61,61,61,0.95)' : 'rgba(138,122,0,0.95)';
+    ctx.fillText(valTxt, x + pad + labW, y + headH / 2 + 1.9 * S);
+    ctx.beginPath();
+    ctx.moveTo(x + pad + labW, y + headH / 2 + 3.9 * S);
+    ctx.lineTo(x + pad + labW + valW, y + headH / 2 + 3.9 * S);
+    ctx.strokeStyle = hasNote ? 'rgba(60,60,60,0.65)' : 'rgba(138,122,0,0.6)';
+    ctx.lineWidth = Math.max(1, W * 0.0005);
+    ctx.stroke();
+  }
+
+  let cy = y + (showHead ? headH : 0);
+  layout.forEach((r, i) => {
+    if (i > 0) {
+      ctx.beginPath();
+      ctx.moveTo(x + pad, cy);
+      ctx.lineTo(x + cardW - pad, cy);
+      ctx.strokeStyle = 'rgba(23,24,26,0.08)';
+      ctx.lineWidth = Math.max(1, W * 0.0004);
+      ctx.stroke();
+    }
+    const base0 = cy + rowPad / 2 + 5.1 * S;
+    ctx.font = fLab;
+    ctx.fillStyle = 'rgba(23,24,26,0.95)';
+    ctx.fillText(r.label, x + pad, base0);
+    ctx.font = fVal;
+    ctx.fillStyle = 'rgba(38,40,43,0.95)';
+    r.lines.forEach((ln, j) => {
+      ctx.fillText(ln, x + pad + r.lw, base0 + j * lineH);
+    });
+    cy += r.h;
+  });
+
+  ctx.restore();
+}
+
+/* ================= 样式 7：今日工作（仿今日相机白卡工作水印） ================= */
+function drawTodayWorkStyle(
+  ctx: CanvasRenderingContext2D,
+  W: number,
+  H: number,
+  input: ComposeInput
+) {
+  const { data: d, fields: f } = input;
+  const m = Math.round(Math.min(W, H) * 0.032);
+  const portrait = H > W;
+  const cardW = portrait ? W - m * 2 : Math.min(W - m * 2, Math.round(W * 0.62));
+  const S = cardW / 100;
+  const pad = 4.5 * S;
+
+  ctx.save();
+  ctx.textBaseline = 'alphabetic';
+
+  const fTime = `700 ${10 * S}px ${MONO}`;
+  const fSub = `500 ${3.4 * S}px ${SANS}`;
+  const fLab = `500 ${3.2 * S}px ${SANS}`;
+  const fVal = `500 ${3.6 * S}px ${SANS}`;
+
+  ctx.font = fVal;
+  const rows: { label: string; value: string }[] = [];
+  if (f.addr && d.address) rows.push({ label: '地点', value: d.address });
+  if (f.lat || f.lng)
+    rows.push({
+      label: '经纬度',
+      value: [f.lat ? d.latStr : '', f.lng ? d.lngStr : ''].filter(Boolean).join(' '),
+    });
+  if (f.alt && d.altLine) rows.push({ label: '海拔', value: d.altLine });
+  if (f.project && d.project) rows.push({ label: '工程', value: d.project });
+  if (f.note && d.note) rows.push({ label: '备注', value: d.note });
+
+  const lineH = 5.4 * S;
+  const rowGap = 2.2 * S;
+  const layout = rows.map((r) => {
+    ctx.font = fLab;
+    const lw = ctx.measureText(r.label).width + 3 * S;
+    ctx.font = fVal;
+    const lines = wrapText(ctx, r.value, cardW - pad * 2 - lw, 3);
+    return { label: r.label, lw, lines, h: lines.length * lineH + rowGap };
+  });
+
+  const headH = 11.5 * S + (f.date ? 5 * S : 0);
+  const rowsH = layout.length ? 3.7 * S + layout.reduce((a, r) => a + r.h, 0) : 0;
+  const totalH = pad * 2 + headH + rowsH;
+  const x = m;
+  const y = input.wmPos === 'bottom' ? H - m - totalH : m;
+
+  rr(ctx, x, y, cardW, totalH, 2.4 * S);
+  ctx.fillStyle = 'rgba(255,255,255,0.92)';
+  ctx.fill();
+
+  let cy = y + pad;
+  ctx.font = fTime;
+  ctx.fillStyle = '#17181a';
+  ctx.fillText(d.timeStr, x + pad, cy + 9.2 * S);
+  if (f.weather && d.weather) {
+    ctx.font = fSub;
+    ctx.fillStyle = 'rgba(90,96,102,0.95)';
+    const wt = ellipsize(ctx, d.weather, cardW * 0.35);
+    ctx.fillText(wt, x + cardW - pad - ctx.measureText(wt).width, cy + 8.6 * S);
+  }
+  cy += 11.5 * S;
+  if (f.date) {
+    ctx.font = fSub;
+    ctx.fillStyle = 'rgba(90,96,102,0.95)';
+    ctx.fillText(`${d.dateStr} ${d.weekdayStr}`, x + pad, cy + 3.4 * S);
+    cy += 5 * S;
+  }
+  if (layout.length) {
+    cy += 1.2 * S;
+    ctx.beginPath();
+    ctx.moveTo(x + pad, cy);
+    ctx.lineTo(x + cardW - pad, cy);
+    ctx.strokeStyle = 'rgba(23,24,26,0.1)';
+    ctx.lineWidth = Math.max(1, W * 0.0004);
+    ctx.stroke();
+    cy += 2.5 * S;
+    for (const r of layout) {
+      const base0 = cy + 4 * S;
+      ctx.font = fLab;
+      ctx.fillStyle = 'rgba(130,136,142,0.95)';
+      ctx.fillText(r.label, x + pad, base0);
+      ctx.font = fVal;
+      ctx.fillStyle = 'rgba(23,24,26,0.95)';
+      r.lines.forEach((ln, j) => {
+        ctx.fillText(ln, x + pad + r.lw, base0 + j * lineH);
+      });
+      cy += r.h;
+    }
+  }
+
+  ctx.restore();
+}
+
 export function drawWatermark(
   ctx: CanvasRenderingContext2D,
   W: number,
@@ -650,6 +840,10 @@ export function drawWatermark(
       return drawStampStyle(ctx, W, H, input);
     case 'site':
       return drawSiteStyle(ctx, W, H, input);
+    case 'today':
+      return drawTodayStyle(ctx, W, H, input);
+    case 'todayWork':
+      return drawTodayWorkStyle(ctx, W, H, input);
     default:
       return drawCardStyle(ctx, W, H, input);
   }

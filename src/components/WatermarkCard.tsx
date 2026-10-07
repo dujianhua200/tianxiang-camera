@@ -56,11 +56,11 @@ function InfoRows({
           <span className="break-words">{data.address}</span>
         </Row>
       )}
-      {fields.coords && (
+      {(fields.lat || fields.lng) && (
         <Row icon={<Navigation size={14} />}>
           <div className={`${monoCls} leading-relaxed text-white/95`}>
-            <div>{data.latStr}</div>
-            <div>{data.lngStr}</div>
+            {fields.lat && <div>{data.latStr}</div>}
+            {fields.lng && <div>{data.lngStr}</div>}
           </div>
         </Row>
       )}
@@ -101,7 +101,8 @@ function CardStyle({
 }) {
   const hasRows =
     (fields.addr && data.address) ||
-    fields.coords ||
+    fields.lat ||
+    fields.lng ||
     (fields.alt && data.altLine) ||
     (fields.project && data.project) ||
     (fields.note && data.note);
@@ -215,11 +216,15 @@ function StripStyle({
               <MapPin size={13} className="shrink-0 text-[#FFD028]" />
             </div>
           )}
-          {fields.coords && (
+          {fields.lat && (
             <div className="flex items-center justify-end gap-1.5 py-[2px]">
-              <span className="truncate font-mono text-[11.5px] text-white/95">
-                {data.latStr} {data.lngStr}
-              </span>
+              <span className="truncate font-mono text-[11.5px] text-white/95">{data.latStr}</span>
+              <Navigation size={13} className="shrink-0 text-[#FFD028]" />
+            </div>
+          )}
+          {fields.lng && (
+            <div className="flex items-center justify-end gap-1.5 py-[2px]">
+              <span className="truncate font-mono text-[11.5px] text-white/95">{data.lngStr}</span>
               <Navigation size={13} className="shrink-0 text-[#FFD028]" />
             </div>
           )}
@@ -315,10 +320,8 @@ function SiteStyle({
 }) {
   const rows: { label: string; value: string }[] = [];
   if (fields.addr && data.address) rows.push({ label: '地\u3000\u3000点：', value: data.address });
-  if (fields.coords) {
-    rows.push({ label: '经\u3000\u3000度：', value: data.siteLng });
-    rows.push({ label: '纬\u3000\u3000度：', value: data.siteLat });
-  }
+  if (fields.lng) rows.push({ label: '经　　度：', value: data.siteLng });
+  if (fields.lat) rows.push({ label: '纬　　度：', value: data.siteLat });
   if (fields.date) rows.push({ label: '拍 摄 时 间：', value: data.siteTime });
   if (fields.weather && data.weather) rows.push({ label: '天\u3000\u3000气：', value: data.weather });
   if (fields.project && data.project) rows.push({ label: '工\u3000\u3000程：', value: data.project });
@@ -365,9 +368,138 @@ export default function WatermarkCard({ data, fields, position, style, onClick, 
         <StampStyle data={data} fields={fields} position={position} onClick={onClick} onPickNote={onPickNote} />
       ) : style === 'site' ? (
         <SiteStyle data={data} fields={fields} position={position} onClick={onClick} onPickNote={onPickNote} />
+      ) : style === 'today' ? (
+        <TodayStyle data={data} fields={fields} position={position} onClick={onClick} onPickNote={onPickNote} />
+      ) : style === 'todayWork' ? (
+        <TodayWorkStyle data={data} fields={fields} position={position} onClick={onClick} onPickNote={onPickNote} />
       ) : (
         <CardStyle data={data} fields={fields} position={position} onClick={onClick} onPickNote={onPickNote} />
       )}
+    </div>
+  );
+}
+
+/* ---------- 样式 6：今日工程（复刻今日相机，无防伪码） ---------- */
+function TodayStyle({
+  data,
+  fields,
+  position,
+  onClick,
+  onPickNote,
+}: {
+  data: WatermarkData;
+  fields: WMFields;
+  position: 'bottom' | 'top';
+  onClick: () => void;
+  onPickNote: () => void;
+}) {
+  const rows: { label: string; value: string }[] = [];
+  if (fields.addr && data.address) rows.push({ label: '地　　点：', value: data.address });
+  if (fields.lng) rows.push({ label: '经　　度：', value: data.siteLng });
+  if (fields.lat) rows.push({ label: '纬　　度：', value: data.siteLat });
+  if (fields.date) rows.push({ label: '拍 摄 时 间：', value: data.siteTime });
+  if (fields.weather && data.weather) rows.push({ label: '天　　气：', value: data.weather });
+  const hasNote = !!data.note;
+  const content = data.note || '请选择选项';
+  return (
+    <div
+      className={`pointer-events-auto absolute left-4 z-20 w-[62%] max-w-[340px] cursor-pointer select-none ${cardPos(position)}`}
+      onClick={onClick}
+    >
+      <div className="overflow-hidden rounded-lg bg-[#f2f4f6]/90 text-[#17181a] shadow-lg">
+        {fields.note && (
+          <div className="bg-[#F7D400] px-2.5 py-1.5 text-[11.5px] font-bold leading-tight">
+            施 工 内 容：
+            <span
+              onClick={(e) => {
+                e.stopPropagation();
+                onPickNote();
+              }}
+              className={`cursor-pointer font-semibold underline underline-offset-2 ${
+                hasNote ? 'text-[#3d3d3d]' : 'text-[#8a7a00]'
+              }`}
+            >
+              {content}
+            </span>
+          </div>
+        )}
+        {rows.map((r, i) => (
+          <div
+            key={i}
+            className={`flex items-baseline px-2.5 py-[5px] text-[10.5px] leading-snug ${i > 0 ? 'border-t border-black/[0.07]' : ''}`}
+          >
+            <span className="shrink-0 font-semibold">{r.label}</span>
+            <span className="min-w-0 flex-1 break-words text-[#26282b]">{r.value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- 样式 7：今日工作（仿今日相机白卡） ---------- */
+function TodayWorkStyle({
+  data,
+  fields,
+  position,
+  onClick,
+  onPickNote,
+}: {
+  data: WatermarkData;
+  fields: WMFields;
+  position: 'bottom' | 'top';
+  onClick: () => void;
+  onPickNote: () => void;
+}) {
+  const rows: { label: string; value: string; pick?: boolean }[] = [];
+  if (fields.addr && data.address) rows.push({ label: '地点', value: data.address });
+  if (fields.lat || fields.lng)
+    rows.push({
+      label: '经纬度',
+      value: [fields.lat ? data.latStr : '', fields.lng ? data.lngStr : ''].filter(Boolean).join(' '),
+    });
+  if (fields.alt && data.altLine) rows.push({ label: '海拔', value: data.altLine });
+  if (fields.project && data.project) rows.push({ label: '工程', value: data.project });
+  if (fields.note && data.note) rows.push({ label: '备注', value: data.note, pick: true });
+  return (
+    <div
+      className={`pointer-events-auto absolute left-4 z-20 w-[calc(100%-2rem)] max-w-[560px] cursor-pointer select-none ${cardPos(position)}`}
+      onClick={onClick}
+    >
+      <div className="rounded-xl bg-white/95 p-3.5 text-[#17181a] shadow-lg">
+        <div className="flex items-start justify-between gap-2">
+          <div className="font-mono text-[30px] font-bold leading-none tracking-tight [font-variant-numeric:tabular-nums]">
+            {data.timeStr}
+          </div>
+          {fields.weather && data.weather && (
+            <div className="pt-1 text-[11.5px] text-gray-500">{data.weather}</div>
+          )}
+        </div>
+        {fields.date && (
+          <div className="mt-1 text-[12px] text-gray-500">
+            {data.dateStr} {data.weekdayStr}
+          </div>
+        )}
+        {rows.length > 0 && <div className="my-2 border-t border-black/10" />}
+        {rows.map((r, i) => (
+          <div key={i} className="flex items-baseline gap-3 py-[3px]">
+            <span className="shrink-0 text-[12px] text-gray-400">{r.label}</span>
+            {r.pick ? (
+              <span
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onPickNote();
+                }}
+                className="min-w-0 flex-1 cursor-pointer break-words text-[12.5px] underline decoration-gray-400/70 underline-offset-2"
+              >
+                {r.value}
+              </span>
+            ) : (
+              <span className="min-w-0 flex-1 break-words text-[12.5px]">{r.value}</span>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
