@@ -14,6 +14,7 @@ import {
   BookOpen,
   Map as MapIcon,
   Wrench,
+  ShieldCheck,
 } from 'lucide-react';
 import WatermarkCard from './components/WatermarkCard';
 import MapPanel from './components/MapPanel';
@@ -21,6 +22,8 @@ import EditPanel, { Settings } from './components/EditPanel';
 import CaptureModal, { Shot } from './components/CaptureModal';
 import DiaryPanel from './components/DiaryPanel';
 import DistMapPanel from './components/DistMapPanel';
+import ChainPanel from './components/ChainPanel';
+import { sealPhoto } from './lib/provenance';
 import { logTrackPoint, dayStr, getShotCount, incShotCount } from './lib/track';
 import { checkQuality, qualityAdvice } from './lib/quality';
 import { composePhoto, WatermarkData } from './lib/capture';
@@ -175,6 +178,7 @@ export default function App() {
   const [activeShot, setActiveShot] = useState<Shot | null>(null);
   const [diaryOpen, setDiaryOpen] = useState(false);
   const [distMapOpen, setDistMapOpen] = useState(false);
+  const [chainOpen, setChainOpen] = useState(false);
   const trackOnRef = useRef(true);
   const [todayCount, setTodayCount] = useState(() => getShotCount());
   const [toolsOpen, setToolsOpen] = useState(false);
@@ -399,14 +403,34 @@ export default function App() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   /* 出片收尾：存相册 + 家云同步 + 飞入动画（拍摄与相册导入共用） */
-  const finalizeShot = (url: string, data: WatermarkData, d: Date) => {
-    const b64 = url.slice(url.indexOf(',') + 1);
+  /* 拍后封存：暗水印嵌入 + 哈希链上链。存证失败不拦截拍照，照片照常保存 */
+  const finalizeShot = async (url: string, data: WatermarkData, d: Date, geo: GeoPoint) => {
+    const id = Date.now();
+    const fileName = `天象七星_${fmtFileTime(d)}.jpg`;
+    let sealed = url;
+    try {
+      /* 暗水印载荷统一存 WGS-84 原始坐标 */
+      const wgs = toDatum(geo.lat, geo.lng, geo.datum, 'wgs84');
+      const r = await sealPhoto(url, {
+        id,
+        ts: d.getTime(),
+        lat: wgs.lat,
+        lng: wgs.lng,
+        project: settings.project,
+        note: settings.note,
+        fileName,
+        device: getDeviceId(),
+      });
+      sealed = r.dataUrl;
+    } catch {
+      /* 存证失败不打扰 */
+    }
+    const b64 = sealed.slice(sealed.indexOf(',') + 1);
     /* 先把相册落盘结果算完，再组装不可变的 shot 对象进 state */
     let savedMsg = '照片已生成';
     let photoUri: string | undefined;
     try {
       if (window.AndroidBridge?.savePhoto) {
-        const fileName = `天象七星_${fmtFileTime(d)}.jpg`;
         const ret = window.AndroidBridge.savePhoto(b64, fileName);
         if (ret.startsWith('ok')) {
           savedMsg = '已保存到相册 · 天象七星';
@@ -420,14 +444,14 @@ export default function App() {
       savedMsg = '保存相册失败，可点缩略图手动下载';
     }
     const shot: Shot = {
-      id: Date.now(),
-      url,
+      id,
+      url: sealed,
       timeLabel: `${fmtDate(d)} ${fmtTime(d)}`,
       day: dayStr(d),
       address: data.address === '位置解析中…' ? '' : data.address,
       latStr: data.latStr,
       lngStr: data.lngStr,
-      fileName: `天象七星_${fmtFileTime(d)}.jpg`,
+      fileName,
       photoUri,
     };
     setShots((s) => [shot, ...s].slice(0, 10));
@@ -447,7 +471,7 @@ export default function App() {
       deviceId: getDeviceId(),
       deviceName: devName(getDeviceId()),
     };
-    setFly({ url, id: shot.id });
+    setFly({ url: sealed, id: shot.id });
     showToast(savedMsg);
     /* 云同步：上传压缩版网页图（长边≤1280，约 250KB），远程/中继通道更稳 */
     const cloudCfg = getCloudCfg();
@@ -456,7 +480,7 @@ export default function App() {
         let small = '';
         try {
           const img = new Image();
-          img.src = url;
+          img.src = sealed;
           await img.decode();
           const sc = Math.min(1, 1280 / Math.max(img.width, img.height));
           const c = document.createElement('canvas');
@@ -514,7 +538,7 @@ export default function App() {
         wmScale: settings.wmScale,
         wmAlpha: settings.wmAlpha,
       });
-      finalizeShot(url, data, effDate);
+      finalizeShot(url, data, effDate, pos);
       /* 端侧影像质检：只提示不拦截 */
       try {
         const probe = new Image();
@@ -567,7 +591,7 @@ export default function App() {
         wmScale: settings.wmScale,
         wmAlpha: settings.wmAlpha,
       });
-      finalizeShot(url, data, dt);
+      finalizeShot(url, data, dt, photoPos ?? pos);
       if (photoPos) showToast('已采用照片原始 GPS 位置');
     } catch {
       showToast('照片导入失败');
@@ -753,6 +777,14 @@ export default function App() {
                     onClick={() => {
                       setToolsOpen(false);
                       setDistMapOpen(true);
+                    }}
+                  />
+                  <ToolItem
+                    icon={<ShieldCheck size={15} />}
+                    label="存证校验"
+                    onClick={() => {
+                      setToolsOpen(false);
+                      setChainOpen(true);
                     }}
                   />
                 </div>
@@ -1060,6 +1092,7 @@ export default function App() {
           project={settings.project}
           photographer={settings.photographer}
         />
+        <ChainPanel open={chainOpen} onClose={() => setChainOpen(false)} shots={shots} />
       </AnimatePresence>
 
       {/* ================= Toast ================= */}
